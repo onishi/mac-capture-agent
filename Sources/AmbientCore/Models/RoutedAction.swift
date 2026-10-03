@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 /// What the router suggests doing about the current screen content.
 public enum SuggestedAction: String, Sendable, Equatable {

@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 /// Joins OCR lines that belong to the same paragraph so that a sentence
 /// wrapped over several lines is evaluated (and translated) as a whole.

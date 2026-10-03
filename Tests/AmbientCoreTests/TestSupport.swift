@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 @testable import AmbientCore
 
 /// Language identifier that returns a fixed guess, or looks the text up in a table.

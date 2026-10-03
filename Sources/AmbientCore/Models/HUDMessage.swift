@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 /// Content to show in the HUD. UI agnostic so it can be produced off the main thread.
 public struct HUDMessage: Sendable, Equatable, Identifiable {

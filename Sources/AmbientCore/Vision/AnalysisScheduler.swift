@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 public struct AnalysisSchedulerConfiguration: Sendable, Equatable {
     /// Minimum time between two OCR passes (OCR runs at most at 1 / interval fps).

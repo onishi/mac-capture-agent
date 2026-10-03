@@ -1,4 +1,7 @@
 import XCTest
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 @testable import AmbientCore
 
 final class ChangeDetectorTests: XCTestCase {

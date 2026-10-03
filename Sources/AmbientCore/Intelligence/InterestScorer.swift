@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 /// Rule-based estimate of how valuable a candidate would be to the user right now.
 public struct InterestScorer: Sendable {

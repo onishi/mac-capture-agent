@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 public struct ChangeDetectorConfiguration: Sendable, Equatable {
     /// Size of a detection cell, in downsampled pixels.
