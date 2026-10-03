@@ -43,6 +43,7 @@ actor AnalysisPipeline {
         ocr: OCRService,
         classifier: ImageClassifier,
         languageIdentifier: any LanguageIdentifying,
+        adjuster: any InterestAdjusting,
         translator: any TranslationProvider,
         foreground: ForegroundContextProvider,
         present: @escaping Presenter
@@ -59,7 +60,7 @@ actor AnalysisPipeline {
                 userLanguage: configuration.targetLanguage,
                 familiarLanguages: configuration.familiarLanguages
             )
-        ))
+        ), adjuster: adjuster)
         self.translator = translator
         self.privacy = PrivacyManager(policy: configuration.privacyPolicy)
         self.foreground = foreground
@@ -137,7 +138,7 @@ actor AnalysisPipeline {
 
         switch action.action {
         case .translate:
-            await translate(action, timestamp: frame.timestamp)
+            await translate(action, bundleIdentifier: app.bundleIdentifier, timestamp: frame.timestamp)
         case .explainTerm, .identifyAnimal, .identifyPlant, .identifyLandmark, .identifyPerson, .ignore:
             // Not implemented in v0.1 (the router keeps them below the show threshold).
             break
@@ -162,7 +163,7 @@ actor AnalysisPipeline {
         return categories
     }
 
-    private func translate(_ action: RoutedAction, timestamp: TimeInterval) async {
+    private func translate(_ action: RoutedAction, bundleIdentifier: String?, timestamp: TimeInterval) async {
         guard let text = action.payload else { return }
         let key = CooldownCache.key(action: action.action, payload: text)
         guard cooldown.checkAndRecord(key, now: timestamp) else {
@@ -188,7 +189,12 @@ actor AnalysisPipeline {
                 title: Self.displayName(of: source, in: configuration.targetLanguage),
                 original: text,
                 detail: translated,
-                anchor: action.region
+                anchor: action.region,
+                features: PersonalizationFeatures(
+                    action: action.action,
+                    language: action.sourceLanguage,
+                    bundleIdentifier: bundleIdentifier
+                )
             )
             await present(message)
         } catch {

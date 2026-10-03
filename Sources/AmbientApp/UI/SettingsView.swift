@@ -2,7 +2,13 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
+    var onResetPersonalization: (() -> Void)?
     @State private var newBundleIdentifier = ""
+
+    init(settings: AppSettings, onResetPersonalization: (() -> Void)? = nil) {
+        _settings = ObservedObject(wrappedValue: settings)
+        self.onResetPersonalization = onResetPersonalization
+    }
 
     var body: some View {
         Form {
@@ -13,6 +19,20 @@ struct SettingsView: View {
                     }
                 }
                 Toggle("I read English — don't translate it", isOn: $settings.englishIsFamiliar)
+                if !settings.skippedLanguages.isEmpty {
+                    ForEach(settings.skippedLanguages.sorted(), id: \.self) { code in
+                        HStack {
+                            Text("Not translated: \(Self.languageName(code))")
+                            Spacer()
+                            Button {
+                                settings.skippedLanguages.remove(code)
+                            } label: {
+                                Image(systemName: "minus.circle")
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                }
                 Text("Translation runs on-device. Install language models in System Settings › General › Language & Region › Translation Languages.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -25,6 +45,21 @@ struct SettingsView: View {
                     }
                 }
                 Toggle("Classify images (experimental)", isOn: $settings.imageClassificationEnabled)
+                Toggle("Follow the display under the mouse pointer", isOn: $settings.followMouseDisplay)
+            }
+
+            Section("HUD") {
+                Picker("Position", selection: $settings.hudPosition) {
+                    ForEach(HUDPosition.allCases) { position in
+                        Text(position.displayName).tag(position)
+                    }
+                }
+                Text("Hovering the HUD keeps it on screen and tells the app the information was useful. Use “Not Useful” in the menu bar to see less of something.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let onResetPersonalization {
+                    Button("Reset Learned Preferences", action: onResetPersonalization)
+                }
             }
 
             Section("Excluded apps") {
@@ -58,7 +93,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 560)
+        .frame(width: 460, height: 640)
     }
 
     private func addBundleIdentifier() {

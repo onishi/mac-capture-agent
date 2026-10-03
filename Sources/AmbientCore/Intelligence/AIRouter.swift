@@ -31,7 +31,8 @@ public final class AIRouter: Sendable {
         for region in context.textRegions {
             guard let foreign = detector.evaluate(region.text).foreignText else { continue }
             let raw = scorer.scoreTranslation(foreign, region: region, context: context)
-            let score = adjuster.adjust(raw, action: .translate, context: context)
+            let features = PersonalizationFeatures(action: .translate, language: foreign.language.code, bundleIdentifier: context.bundleIdentifier)
+            let score = adjuster.adjust(raw, features: features)
             result.append(RoutedAction(
                 action: .translate,
                 confidence: foreign.language.confidence,
@@ -44,7 +45,8 @@ public final class AIRouter: Sendable {
 
         for category in Set(context.visualCategories) {
             guard let action = Self.visualAction(for: category) else { continue }
-            let score = adjuster.adjust(scorer.scoreVisual(category, context: context), action: action, context: context)
+            let features = PersonalizationFeatures(action: action, language: nil, bundleIdentifier: context.bundleIdentifier)
+            let score = adjuster.adjust(scorer.scoreVisual(category, context: context), features: features)
             result.append(RoutedAction(action: action, confidence: 0.5, importance: score.value, region: nil, payload: nil))
         }
 

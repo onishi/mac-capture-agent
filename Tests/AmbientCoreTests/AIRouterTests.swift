@@ -57,7 +57,7 @@ final class AIRouterTests: XCTestCase {
 
     func testPersonalizationCanSuppress() {
         struct Mute: InterestAdjusting {
-            func adjust(_ score: InterestScore, action: SuggestedAction, context: AnalysisContext) -> InterestScore { InterestScore(0) }
+            func adjust(_ score: InterestScore, features: PersonalizationFeatures) -> InterestScore { InterestScore(0) }
         }
         let router = AIRouter(
             detector: ForeignTextDetector(identifier: StubLanguageIdentifier(fallback: LanguageGuess(code: "fr", confidence: 0.99)),

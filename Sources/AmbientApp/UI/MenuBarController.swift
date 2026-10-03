@@ -62,6 +62,17 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             menu.addItem(item("Retry", #selector(resume)))
         }
 
+        if let last = controller.lastMessage {
+            menu.addItem(.separator())
+            let header = NSMenuItem(title: "Last: \(Self.truncated(last.detail))", action: nil, keyEquivalent: "")
+            header.isEnabled = false
+            menu.addItem(header)
+            menu.addItem(item("Not Useful", #selector(markNotUseful)))
+            if last.features?.language != nil {
+                menu.addItem(item("Stop Translating \(last.title)", #selector(stopTranslatingLanguage)))
+            }
+        }
+
         menu.addItem(.separator())
         menu.addItem(item("Translation Languages…", #selector(openTranslationLanguages)))
         menu.addItem(item("Settings…", #selector(showSettings), key: ","))
@@ -75,6 +86,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     @objc private func pauseThirtyMinutes() { controller.pause(for: 30 * 60) }
     @objc private func pauseIndefinitely() { controller.pause(for: nil) }
     @objc private func resume() { Task { await controller.resume() } }
+    @objc private func markNotUseful() { controller.markLastMessageNotUseful() }
+    @objc private func stopTranslatingLanguage() { controller.stopTranslatingLastLanguage() }
     @objc private func grantPermission() { controller.openScreenRecordingSettings() }
     @objc private func openTranslationLanguages() { controller.openTranslationSettings() }
     @objc private func showSettings() { openSettings() }
@@ -100,6 +113,11 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         image?.isTemplate = true
         statusItem.button?.image = image
         statusItem.button?.toolTip = Self.title(for: status)
+    }
+
+    private static func truncated(_ text: String, limit: Int = 32) -> String {
+        let singleLine = text.split(whereSeparator: \.isNewline).joined(separator: " ")
+        return singleLine.count > limit ? String(singleLine.prefix(limit)) + "…" : singleLine
     }
 
     private static func isFailed(_ status: AppController.Status) -> Bool {

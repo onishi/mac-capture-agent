@@ -5,9 +5,11 @@ import SwiftUI
 final class SettingsWindowController {
     private var window: NSWindow?
     private let settings: AppSettings
+    private let onResetPersonalization: () -> Void
 
-    init(settings: AppSettings) {
+    init(settings: AppSettings, onResetPersonalization: @escaping () -> Void) {
         self.settings = settings
+        self.onResetPersonalization = onResetPersonalization
     }
 
     func show() {
@@ -18,7 +20,7 @@ final class SettingsWindowController {
     }
 
     private func makeWindow() -> NSWindow {
-        let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(settings: settings)))
+        let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(settings: settings, onResetPersonalization: onResetPersonalization)))
         window.title = "Ambient Screen Intelligence Settings"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false

@@ -4,7 +4,7 @@ import CoreGraphics
 #endif
 
 /// What the router suggests doing about the current screen content.
-public enum SuggestedAction: String, Sendable, Equatable {
+public enum SuggestedAction: String, Sendable, Equatable, Codable {
     case translate
     case explainTerm
     case identifyAnimal

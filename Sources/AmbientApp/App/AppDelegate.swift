@@ -12,7 +12,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
 
         let controller = AppController(settings: settings)
-        let settingsWindow = SettingsWindowController(settings: settings)
+        let settingsWindow = SettingsWindowController(settings: settings) { [weak controller] in
+            controller?.resetPersonalization()
+        }
         self.controller = controller
         self.settingsWindow = settingsWindow
         menuBar = MenuBarController(controller: controller) { [weak settingsWindow] in
@@ -21,6 +23,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Log.app.info("Launched")
         Task { await controller.start() }
+    }
+
+    func resetPersonalization() {
+        controller?.resetPersonalization()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

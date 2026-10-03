@@ -16,14 +16,25 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
     public let detail: String
     /// Normalized, top-left-origin rect of the source on screen (for future anchoring).
     public let anchor: CGRect?
+    /// What the message is about, for personalization feedback (no text).
+    public let features: PersonalizationFeatures?
 
-    public init(id: UUID = UUID(), kind: Kind, title: String, original: String, detail: String, anchor: CGRect?) {
+    public init(
+        id: UUID = UUID(),
+        kind: Kind,
+        title: String,
+        original: String,
+        detail: String,
+        anchor: CGRect?,
+        features: PersonalizationFeatures? = nil
+    ) {
         self.id = id
         self.kind = kind
         self.title = title
         self.original = original
         self.detail = detail
         self.anchor = anchor
+        self.features = features
     }
 
     /// Display time between 3 and 6 seconds depending on how much there is to read.
