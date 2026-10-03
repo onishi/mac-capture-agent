@@ -1,4 +1,4 @@
-# Ambient Screen Intelligence (v0.1)
+# Ambient Screen Intelligence (v0.2)
 
 ユーザーが見ている画面を AI も一緒に見て、**本当に価値があるときだけ**静かに補足情報を出す macOS メニューバーアプリです。
 
@@ -62,6 +62,8 @@ swift test
 | Pause 5 Minutes / Pause 30 Minutes | 一定時間キャプチャと解析を完全停止し、自動で再開 |
 | Pause | 手動で再開するまで停止 |
 | Resume | 再開 |
+| Last: … / Not Useful | 直前の HUD を「役に立たない」と学習させ、似た表示を減らす |
+| Stop Translating <言語> | 直前の HUD の言語を今後翻訳しない |
 | Translation Languages… | 翻訳言語モデルの設定画面を開く |
 | Settings… | 翻訳先言語、モード、除外アプリなど |
 | Quit | 終了 |
@@ -110,10 +112,13 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **AI Router（ignore-first）**: ルールベースの `InterestScorer` で 0.0〜1.0 のスコアを付け、0.7 以上のものだけ表示。メニューバー領域の文字やコーディングアプリでは減点
 - **Cooldown**: 同じ内容は 5 分間再表示しない（OCR の揺れを吸収する正規化キー）
 - **HUD**: 透明・最前面・クリック透過の `NSPanel` + SwiftUI。fade in 300ms → 3〜6 秒表示 → fade out 400ms。画面右上に表示
+- **HUD の配置（v0.2）**: 対象テキストの近く（下 → 上 → 右 → 左の順で、文字を隠さず画面内に収まる位置）に表示。設定で右上固定にも切替可能
+- **複数ディスプレイ（v0.2）**: 「マウスポインタのあるディスプレイを追従」をオンにすると、ポインタの移動に合わせてキャプチャ対象のディスプレイを切り替え（2 秒ごとに確認）。HUD はキャプチャ中のディスプレイに表示
+- **Personalization（v0.2）**: HUD はクリック透過のまま、ポインタを 0.6 秒以上乗せると「関心あり」として加点し、乗せている間は消えない。メニューの *Not Useful* で減点。学習するのは「アクション × 言語 × アプリ」単位の重みだけで、テキストは保存しない（`PersonalizationModel`、上限 ±0.3）。設定画面からリセット可能
 - **Pause / Resume**: 5 分・30 分・無期限。停止中はキャプチャ自体を止める
 - **Privacy**: 除外アプリ（1Password などのパスワードマネージャー、メッセージ、写真）とパスワード系ウィンドウタイトルでは解析しない
 - **Performance Mode**: Battery / Balanced / Performance（キャプチャ 5/15/30fps、Vision 0.5/1/2fps）
-- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy など 47 件
+- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization など 61 件
 
 ## プロジェクト構成
 
@@ -127,6 +132,7 @@ Sources/
 │   ├── Intelligence/       AIRouter, InterestScorer, InterestScore, CooldownCache, Personalization, AppContextClassifier
 │   ├── Translation/        TranslationProvider
 │   ├── Privacy/            PrivacyPolicy
+│   ├── Presentation/       HUDPlacement
 │   ├── Settings/           PerformanceMode
 │   └── Future/             AnalysisResult, VisualMemory（将来用のプロトコル）
 └── AmbientApp/             macOS アプリ（Xcode ターゲット）
@@ -146,14 +152,15 @@ Xcode プロジェクトは Xcode 16 の「同期フォルダ」を使ってい�
 
 ## 既知の制限
 
-- **メインディスプレイのみ**キャプチャします（複数ディスプレイは `preferredDisplayID` で拡張可能な構造）
-- HUD は画面右上固定です（`HUDMessage.anchor` に対象位置は保持済み）
+- 同時にキャプチャするディスプレイは 1 枚です（メイン、またはマウスポインタのあるディスプレイ）
+- HUD の位置はキャプチャ時点の座標です。HUD 表示までにスクロールすると少しずれることがあります
 - 翻訳には、事前に翻訳言語モデルのダウンロードが必要です
 - macOS 15 の翻訳は SwiftUI `.translationTask` を 1×1 の透明ウィンドウでホストする方式のため、環境によっては動作しない可能性があります（8 秒でタイムアウトし、何も表示しません）。macOS 26 では直接 `TranslationSession` を使います
 - 起動時点ですでに表示されている内容は解析しません（変化した部分だけが対象）
 - 画像分類の結果はまだ表示に使っていません（ルーターは identify 系を表示閾値未満に抑えています）
 - 除外アプリの「キャプチャ画像からの除去」は解析開始時点で起動中のアプリが対象です（後から起動したアプリも、前面にある間は解析しません）
-- Personalization（HUD をすぐ閉じたら減点、など）は未実装です（`InterestAdjusting` で差し替え可能）
+- HUD はクリック透過なので「すぐ閉じる」という操作はありません。減点はメニューの *Not Useful* で行います
+- 「検索した」（`searched`）フィードバックは型だけ用意しており、Web Search 実装時に接続します
 - 開発環境の都合上、本リポジトリの初期実装は Linux 上でコアロジックのビルドとテストのみ検証しています。アプリ本体のビルドは GitHub Actions（macOS ランナー）で確認しています
 
 ## 今後の予定
@@ -163,8 +170,6 @@ Xcode プロジェクトは Xcode 16 の「同期フォルダ」を使ってい�
 - Movie Mode（俳優、キャラクター、ロケ地、音楽）
 - Coding Mode（VS Code / Terminal のコード説明、エラー解析）— `AppContextClassifier` で検出済み
 - Foundation Models / Core ML によるローカル LLM 判定、`AIProvider` 経由の Cloud AI（オプトイン）
-- Personalization による表示優先度の学習
-- HUD を対象付近に表示、複数ディスプレイ対応
 - Battery 状態に応じた自動モード切替
 
 ## Privacy policy（概要）
@@ -174,4 +179,4 @@ Xcode プロジェクトは Xcode 16 の「同期フォルダ」を使ってい�
 - **送信しない**: アプリはサンドボックス化されており、ネットワークの Entitlement を持ちません。Cloud AI は未実装で、将来導入する場合も明示的なオプトインとします
 - **除外**: パスワードマネージャー、メッセージ、写真などはキャプチャ画像から除去され、解析もされません。パスワード入力画面らしいウィンドウタイトルでも解析を止めます。除外アプリは設定画面で追加できます
 - **ログ**: OCR したテキストの本文はログに記録しません（件数・文字数・言語コードのみ）
-- **保存される設定**: 翻訳先言語・モード・除外アプリなどの設定値のみ `UserDefaults` に保存します
+- **保存される設定**: 翻訳先言語・モード・除外アプリなどの設定値と、Personalization の重み（アクション・言語・アプリ ID ごとの数値のみ）を `UserDefaults` に保存します
