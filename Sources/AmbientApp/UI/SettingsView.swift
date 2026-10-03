@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     var onResetPersonalization: (() -> Void)?
+    var briefingAvailable: Bool = AppleIntelligenceBriefingProvider().isAvailable
     @State private var newBundleIdentifier = ""
 
     init(settings: AppSettings, onResetPersonalization: (() -> Void)? = nil) {
@@ -46,6 +47,16 @@ struct SettingsView: View {
                 }
                 Toggle("Classify images (experimental)", isOn: $settings.imageClassificationEnabled)
                 Toggle("Follow the display under the mouse pointer", isOn: $settings.followMouseDisplay)
+            }
+
+            Section("Intelligence") {
+                Toggle("Briefing notes (Apple Intelligence, on-device)", isOn: $settings.briefingEnabled)
+                    .disabled(!briefingAvailable)
+                Text(briefingAvailable
+                     ? "Adds a one-line note about what the text means for you. Runs entirely on this Mac."
+                     : "Requires macOS 26 with Apple Intelligence turned on.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("HUD") {

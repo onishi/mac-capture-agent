@@ -14,6 +14,7 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         static let hudPosition = "hudPosition"
         static let followMouseDisplay = "followMouseDisplay"
         static let personalization = "personalizationModel"
+        static let briefing = "briefingEnabled"
     }
 
     static let supportedTargetLanguages = ["ja", "en", "zh-Hans", "zh-Hant", "ko", "fr", "de", "es", "it", "pt"]
@@ -49,6 +50,11 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         didSet { defaults.set(followMouseDisplay, forKey: Key.followMouseDisplay) }
     }
 
+    /// One-line context notes from Apple Intelligence (on-device), when available.
+    @Published var briefingEnabled: Bool {
+        didSet { defaults.set(briefingEnabled, forKey: Key.briefing) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         let systemLanguage = Locale.preferredLanguages.first.map(LanguageCode.base) ?? "ja"
@@ -62,6 +68,7 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         skippedLanguages = Set(defaults.stringArray(forKey: Key.skippedLanguages) ?? [])
         hudPosition = defaults.string(forKey: Key.hudPosition).flatMap(HUDPosition.init(rawValue:)) ?? .nearTarget
         followMouseDisplay = defaults.bool(forKey: Key.followMouseDisplay)
+        briefingEnabled = defaults.object(forKey: Key.briefing) as? Bool ?? true
     }
 
     // MARK: Personalization (aggregated weights only, never screen content)
@@ -91,7 +98,8 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
             familiarLanguages: familiarLanguages,
             performanceMode: performanceMode,
             imageClassificationEnabled: imageClassificationEnabled,
-            privacyPolicy: PrivacyPolicy(excludedBundleIdentifiers: excludedBundleIdentifiers)
+            privacyPolicy: PrivacyPolicy(excludedBundleIdentifiers: excludedBundleIdentifiers),
+            briefingEnabled: briefingEnabled
         )
     }
 }

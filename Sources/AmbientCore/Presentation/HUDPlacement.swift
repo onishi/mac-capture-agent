@@ -81,3 +81,34 @@ public struct HUDPlacement: Sendable, Equatable {
         Swift.min(Swift.max(value, lower), Swift.max(lower, upper))
     }
 }
+
+/// Geometry for the HUD chrome (reticle + leader line). Coordinates are in the
+/// overlay view's space (top-left origin), but the math is orientation agnostic.
+public enum HUDGeometry {
+    /// Leader line from the target corner closest to the card, to the closest
+    /// point on the card's edge. `nil` when the rects overlap.
+    public static func leaderLine(from target: CGRect, to card: CGRect) -> (start: CGPoint, end: CGPoint)? {
+        guard !target.intersects(card) else { return nil }
+        let corners = [
+            CGPoint(x: target.minX, y: target.minY), CGPoint(x: target.maxX, y: target.minY),
+            CGPoint(x: target.minX, y: target.maxY), CGPoint(x: target.maxX, y: target.maxY)
+        ]
+        let candidates = corners.map { corner -> (CGPoint, CGPoint, CGFloat) in
+            let end = closestPoint(on: card, to: corner)
+            return (corner, end, hypot(end.x - corner.x, end.y - corner.y))
+        }
+        guard let best = candidates.min(by: { $0.2 < $1.2 }) else { return nil }
+        return (best.0, best.1)
+    }
+
+    public static func closestPoint(on rect: CGRect, to point: CGPoint) -> CGPoint {
+        CGPoint(x: Swift.min(Swift.max(point.x, rect.minX), rect.maxX),
+                y: Swift.min(Swift.max(point.y, rect.minY), rect.maxY))
+    }
+
+    /// Converts an AppKit screen rect (bottom-left origin) into the top-left
+    /// coordinate space of an overlay covering `screenFrame`.
+    public static func viewRect(fromScreenRect rect: CGRect, screenFrame: CGRect) -> CGRect {
+        CGRect(x: rect.minX - screenFrame.minX, y: screenFrame.maxY - rect.maxY, width: rect.width, height: rect.height)
+    }
+}

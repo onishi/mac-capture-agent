@@ -1,4 +1,4 @@
-# Ambient Screen Intelligence (v0.2)
+# Ambient Screen Intelligence (v0.3)
 
 ユーザーが見ている画面を AI も一緒に見て、**本当に価値があるときだけ**静かに補足情報を出す macOS メニューバーアプリです。
 
@@ -64,6 +64,7 @@ swift test
 | Resume | 再開 |
 | Last: … / Not Useful | 直前の HUD を「役に立たない」と学習させ、似た表示を減らす |
 | Stop Translating <言語> | 直前の HUD の言語を今後翻訳しない |
+| Preview HUD | マウスポインタ付近にデモの HUD を表示（見た目の確認用） |
 | Translation Languages… | 翻訳言語モデルの設定画面を開く |
 | Settings… | 翻訳先言語、モード、除外アプリなど |
 | Quit | 終了 |
@@ -112,13 +113,19 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **AI Router（ignore-first）**: ルールベースの `InterestScorer` で 0.0〜1.0 のスコアを付け、0.7 以上のものだけ表示。メニューバー領域の文字やコーディングアプリでは減点
 - **Cooldown**: 同じ内容は 5 分間再表示しない（OCR の揺れを吸収する正規化キー）
 - **HUD**: 透明・最前面・クリック透過の `NSPanel` + SwiftUI。fade in 300ms → 3〜6 秒表示 → fade out 400ms。画面右上に表示
+- **SF スパイ映画風 HUD（v0.3）**: 画面全体を覆う透過・クリック透過レイヤーに描画
+  - 対象テキストへのロックオン・レティクル（`ACQUIRING` → `LOCKED`）と、カードへ伸びる点線の引き出し線
+  - ダークガラスのインテル・カード: `◢ INTERCEPT // LINGUISTIC` ヘッダ、ターゲットコード、`FR ▸ JA`、10 段の信頼度メーター、走査線、スキャンスイープ
+  - 翻訳文は暗号が解読されるように表示（デコード演出、カードのサイズは変わらない）
+  - 「視差効果を減らす」設定時はアニメーションを省略。演出が終わるとタイムラインを止めて CPU を使わない
+- **Briefing（v0.3, macOS 26 + Apple Intelligence）**: Foundation Models のオンデバイス LLM で、翻訳に一行の補足（`BRIEF ▸ …`）を付ける。HUD は先に表示し、生成中は `ANALYZING ▮`。5 秒でタイムアウト。LLM に渡すのは認識済みのテキストとアプリ名だけで、画像は渡さない
 - **HUD の配置（v0.2）**: 対象テキストの近く（下 → 上 → 右 → 左の順で、文字を隠さず画面内に収まる位置）に表示。設定で右上固定にも切替可能
 - **複数ディスプレイ（v0.2）**: 「マウスポインタのあるディスプレイを追従」をオンにすると、ポインタの移動に合わせてキャプチャ対象のディスプレイを切り替え（2 秒ごとに確認）。HUD はキャプチャ中のディスプレイに表示
 - **Personalization（v0.2）**: HUD はクリック透過のまま、ポインタを 0.6 秒以上乗せると「関心あり」として加点し、乗せている間は消えない。メニューの *Not Useful* で減点。学習するのは「アクション × 言語 × アプリ」単位の重みだけで、テキストは保存しない（`PersonalizationModel`、上限 ±0.3）。設定画面からリセット可能
 - **Pause / Resume**: 5 分・30 分・無期限。停止中はキャプチャ自体を止める
 - **Privacy**: 除外アプリ（1Password などのパスワードマネージャー、メッセージ、写真）とパスワード系ウィンドウタイトルでは解析しない
 - **Performance Mode**: Battery / Balanced / Performance（キャプチャ 5/15/30fps、Vision 0.5/1/2fps）
-- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization など 61 件
+- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization、DecodeEffect、Briefing など 74 件
 
 ## プロジェクト構成
 
@@ -159,6 +166,7 @@ Xcode プロジェクトは Xcode 16 の「同期フォルダ」を使ってい�
 - 起動時点ですでに表示されている内容は解析しません（変化した部分だけが対象）
 - 画像分類の結果はまだ表示に使っていません（ルーターは identify 系を表示閾値未満に抑えています）
 - 除外アプリの「キャプチャ画像からの除去」は解析開始時点で起動中のアプリが対象です（後から起動したアプリも、前面にある間は解析しません）
+- Briefing は macOS 26 かつ Apple Intelligence が有効な Mac でのみ動作します（それ以外では行ごと表示されません）
 - HUD はクリック透過なので「すぐ閉じる」という操作はありません。減点はメニューの *Not Useful* で行います
 - 「検索した」（`searched`）フィードバックは型だけ用意しており、Web Search 実装時に接続します
 - 開発環境の都合上、本リポジトリの初期実装は Linux 上でコアロジックのビルドとテストのみ検証しています。アプリ本体のビルドは GitHub Actions（macOS ランナー）で確認しています
@@ -169,7 +177,7 @@ Xcode プロジェクトは Xcode 16 の「同期フォルダ」を使ってい�
 - Web Search（person / animal / plant / landmark / product / news / technical term）
 - Movie Mode（俳優、キャラクター、ロケ地、音楽）
 - Coding Mode（VS Code / Terminal のコード説明、エラー解析）— `AppContextClassifier` で検出済み
-- Foundation Models / Core ML によるローカル LLM 判定、`AIProvider` 経由の Cloud AI（オプトイン）
+- Foundation Models を使った表示判断そのもの（現在は Briefing の生成のみ）、`AIProvider` 経由の Cloud AI（オプトイン）
 - Battery 状態に応じた自動モード切替
 
 ## Privacy policy（概要）

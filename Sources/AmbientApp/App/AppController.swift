@@ -27,6 +27,7 @@ final class AppController: ObservableObject {
     private let ocr = OCRService()
     private let classifier = ImageClassifier()
     private let personalization: PersonalizationStore
+    let briefingProvider = AppleIntelligenceBriefingProvider()
 
     private var pipelineTask: Task<Void, Never>?
     private var resumeTask: Task<Void, Never>?
@@ -139,6 +140,40 @@ final class AppController: ObservableObject {
         await capture.stop()
     }
 
+    // MARK: Demo
+
+    /// Shows a sample HUD next to the mouse pointer, to preview the look
+    /// without waiting for real foreign-language text.
+    func showDemoHUD() {
+        let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
+        guard let screen else { return }
+        let mouse = NSEvent.mouseLocation
+        let frame = screen.frame
+        // A text-line sized target just above the pointer (normalized, top-left origin).
+        let anchor = CGRect(
+            x: (mouse.x - frame.minX) / frame.width - 0.08,
+            y: (frame.maxY - mouse.y) / frame.height - 0.04,
+            width: 0.22,
+            height: 0.03
+        ).clampedToUnit()
+        let message = HUDMessage(
+            kind: .translation,
+            title: "French",
+            original: "Le musée est fermé le lundi et les jours fériés.",
+            detail: "美術館は月曜日と祝日は休館です。",
+            anchor: anchor,
+            features: nil,
+            sourceLanguage: "fr",
+            targetLanguage: settings.targetLanguage,
+            confidence: 0.97
+        )
+        overlay.show(message, on: screen, position: settings.hudPosition, briefingPending: true)
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1.6))
+            self?.overlay.updateBriefing("訪問前に営業日の確認を", for: message.id)
+        }
+    }
+
     // MARK: Feedback
 
     /// "Not useful": strongly lowers the score of similar content.
@@ -246,10 +281,21 @@ final class AppController: ObservableObject {
             adjuster: personalization,
             translator: AppleTranslationProvider(bridge: translationBridge),
             foreground: foreground,
-            present: { message in
+            briefingProvider: briefingProvider,
+            present: { event in
                 await MainActor.run { [weak self] in
-                    self?.lastMessage = message
-                    overlay.show(message, on: NSScreen.screen(for: displayID), position: settings.hudPosition)
+                    switch event {
+                    case .show(let message, let briefingPending):
+                        self?.lastMessage = message
+                        overlay.show(
+                            message,
+                            on: NSScreen.screen(for: displayID),
+                            position: settings.hudPosition,
+                            briefingPending: briefingPending
+                        )
+                    case .briefing(let messageID, let text):
+                        overlay.updateBriefing(text, for: messageID)
+                    }
                 }
             }
         )

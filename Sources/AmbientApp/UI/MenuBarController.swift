@@ -75,6 +75,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
         menu.addItem(item("Translation Languages…", #selector(openTranslationLanguages)))
+        menu.addItem(item("Preview HUD", #selector(previewHUD)))
         menu.addItem(item("Settings…", #selector(showSettings), key: ","))
         menu.addItem(.separator())
         menu.addItem(item("Quit Ambient Screen Intelligence", #selector(quit), key: "q"))
@@ -86,6 +87,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     @objc private func pauseThirtyMinutes() { controller.pause(for: 30 * 60) }
     @objc private func pauseIndefinitely() { controller.pause(for: nil) }
     @objc private func resume() { Task { await controller.resume() } }
+    @objc private func previewHUD() { controller.showDemoHUD() }
     @objc private func markNotUseful() { controller.markLastMessageNotUseful() }
     @objc private func stopTranslatingLanguage() { controller.stopTranslatingLastLanguage() }
     @objc private func grantPermission() { controller.openScreenRecordingSettings() }
@@ -105,7 +107,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private func updateIcon(for status: AppController.Status) {
         let symbol: String
         switch status {
-        case .running, .starting: symbol = "eye"
+        case .running, .starting: symbol = "viewfinder"
         case .paused, .idle: symbol = "eye.slash"
         case .needsPermission, .failed: symbol = "exclamationmark.triangle"
         }

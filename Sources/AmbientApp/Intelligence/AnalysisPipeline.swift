@@ -8,6 +8,13 @@ struct PipelineConfiguration: Sendable, Equatable {
     var performanceMode: PerformanceMode
     var imageClassificationEnabled: Bool
     var privacyPolicy: PrivacyPolicy
+    var briefingEnabled: Bool
+}
+
+/// What the pipeline asks the HUD to do.
+enum HUDEvent: Sendable {
+    case show(HUDMessage, briefingPending: Bool)
+    case briefing(messageID: UUID, text: String?)
 }
 
 /// ScreenCaptureKit frames → change detection → region OCR / classification
@@ -16,7 +23,7 @@ struct PipelineConfiguration: Sendable, Equatable {
 /// Runs entirely off the main thread. Any failure along the way results in
 /// nothing being shown (and a debug log entry).
 actor AnalysisPipeline {
-    typealias Presenter = @Sendable (HUDMessage) async -> Void
+    typealias Presenter = @Sendable (HUDEvent) async -> Void
 
     private let configuration: PipelineConfiguration
     private let frameBuffer = FrameBuffer()
@@ -30,6 +37,8 @@ actor AnalysisPipeline {
     private let privacy: PrivacyManager
     private let foreground: ForegroundContextProvider
     private let present: Presenter
+    private let briefingProvider: (any BriefingProvider)?
+    private let briefingTimeout: Duration = .seconds(5)
 
     private var lastDetection: TimeInterval = 0
     private var lastClassification: TimeInterval = 0
@@ -46,6 +55,7 @@ actor AnalysisPipeline {
         adjuster: any InterestAdjusting,
         translator: any TranslationProvider,
         foreground: ForegroundContextProvider,
+        briefingProvider: (any BriefingProvider)?,
         present: @escaping Presenter
     ) {
         self.configuration = configuration
@@ -65,6 +75,7 @@ actor AnalysisPipeline {
         self.privacy = PrivacyManager(policy: configuration.privacyPolicy)
         self.foreground = foreground
         self.present = present
+        self.briefingProvider = configuration.briefingEnabled ? briefingProvider : nil
     }
 
     /// Consumes frames until the stream finishes or the task is cancelled.
@@ -138,7 +149,7 @@ actor AnalysisPipeline {
 
         switch action.action {
         case .translate:
-            await translate(action, bundleIdentifier: app.bundleIdentifier, timestamp: frame.timestamp)
+            await translate(action, app: app, timestamp: frame.timestamp)
         case .explainTerm, .identifyAnimal, .identifyPlant, .identifyLandmark, .identifyPerson, .ignore:
             // Not implemented in v0.1 (the router keeps them below the show threshold).
             break
@@ -163,7 +174,7 @@ actor AnalysisPipeline {
         return categories
     }
 
-    private func translate(_ action: RoutedAction, bundleIdentifier: String?, timestamp: TimeInterval) async {
+    private func translate(_ action: RoutedAction, app: ForegroundContextProvider.Snapshot, timestamp: TimeInterval) async {
         guard let text = action.payload else { return }
         let key = CooldownCache.key(action: action.action, payload: text)
         guard cooldown.checkAndRecord(key, now: timestamp) else {
@@ -193,12 +204,53 @@ actor AnalysisPipeline {
                 features: PersonalizationFeatures(
                     action: action.action,
                     language: action.sourceLanguage,
-                    bundleIdentifier: bundleIdentifier
-                )
+                    bundleIdentifier: app.bundleIdentifier
+                ),
+                sourceLanguage: action.sourceLanguage,
+                targetLanguage: configuration.targetLanguage,
+                confidence: action.confidence
             )
-            await present(message)
+            let briefing = briefingProvider.flatMap { $0.isAvailable ? $0 : nil }
+            await present(.show(message, briefingPending: briefing != nil))
+            if let briefing {
+                requestBriefing(from: briefing, for: message, appName: app.appName)
+            }
         } catch {
             Log.translation.error("Translation failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    /// Generates the briefing in the background so the pipeline keeps running.
+    private nonisolated func requestBriefing(from provider: any BriefingProvider, for message: HUDMessage, appName: String?) {
+        let request = BriefingRequest(
+            original: message.original,
+            translation: message.detail,
+            sourceLanguage: message.sourceLanguage,
+            targetLanguage: message.targetLanguage ?? "ja",
+            appName: appName
+        )
+        let present = self.present
+        let timeout = briefingTimeout
+        Task.detached(priority: .utility) {
+            let text: String? = await withTaskGroup(of: String?.self) { group in
+                group.addTask {
+                    do {
+                        let raw = try await provider.briefing(for: request)
+                        return BriefingSanitizer.sanitize(raw, translation: request.translation)
+                    } catch {
+                        Log.translation.debug("Briefing failed: \(String(describing: error), privacy: .public)")
+                        return nil
+                    }
+                }
+                group.addTask {
+                    try? await Task.sleep(for: timeout)
+                    return nil
+                }
+                let first = await group.next() ?? nil
+                group.cancelAll()
+                return first
+            }
+            await present(.briefing(messageID: message.id, text: text))
         }
     }
 

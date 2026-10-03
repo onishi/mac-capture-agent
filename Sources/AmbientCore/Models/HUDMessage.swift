@@ -14,10 +14,16 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
     public let title: String
     public let original: String
     public let detail: String
-    /// Normalized, top-left-origin rect of the source on screen (for future anchoring).
+    /// Normalized, top-left-origin rect of the source on screen.
     public let anchor: CGRect?
     /// What the message is about, for personalization feedback (no text).
     public let features: PersonalizationFeatures?
+    /// Source / target language codes, e.g. "fr" → "ja".
+    public let sourceLanguage: String?
+    public let targetLanguage: String?
+    /// Detection confidence (0...1), shown as a meter.
+    public let confidence: Double?
+    public let capturedAt: Date
 
     public init(
         id: UUID = UUID(),
@@ -26,7 +32,11 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
         original: String,
         detail: String,
         anchor: CGRect?,
-        features: PersonalizationFeatures? = nil
+        features: PersonalizationFeatures? = nil,
+        sourceLanguage: String? = nil,
+        targetLanguage: String? = nil,
+        confidence: Double? = nil,
+        capturedAt: Date = Date()
     ) {
         self.id = id
         self.kind = kind
@@ -35,6 +45,15 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
         self.detail = detail
         self.anchor = anchor
         self.features = features
+        self.sourceLanguage = sourceLanguage
+        self.targetLanguage = targetLanguage
+        self.confidence = confidence.map { min(max($0, 0), 1) }
+        self.capturedAt = capturedAt
+    }
+
+    /// Display time is extended while a briefing is being generated.
+    public func displayDuration(withBriefing: Bool) -> TimeInterval {
+        withBriefing ? min(8, displayDuration + 2) : displayDuration
     }
 
     /// Display time between 3 and 6 seconds depending on how much there is to read.

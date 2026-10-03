@@ -59,3 +59,20 @@ final class HUDPlacementTests: XCTestCase {
         XCTAssertEqual(frame.minX, 1100)
     }
 }
+
+final class HUDGeometryTests: XCTestCase {
+    func testLeaderLineConnectsNearestCornerToCardEdge() throws {
+        let target = CGRect(x: 100, y: 100, width: 200, height: 40)
+        let card = CGRect(x: 100, y: 160, width: 300, height: 120)  // below (top-left space)
+        let line = try XCTUnwrap(HUDGeometry.leaderLine(from: target, to: card))
+        XCTAssertEqual(line.start.y, 140)
+        XCTAssertEqual(line.end.y, 160)
+        XCTAssertNil(HUDGeometry.leaderLine(from: target, to: target.insetBy(dx: 10, dy: 10)))
+    }
+
+    func testViewRectConversion() {
+        let screen = CGRect(x: 1000, y: 0, width: 1000, height: 800)
+        let rect = HUDGeometry.viewRect(fromScreenRect: CGRect(x: 1100, y: 600, width: 50, height: 100), screenFrame: screen)
+        XCTAssertEqual(rect, CGRect(x: 100, y: 100, width: 50, height: 100))
+    }
+}
