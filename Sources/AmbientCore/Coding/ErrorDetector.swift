@@ -22,7 +22,12 @@ public struct ErrorDetector: Sendable {
 
     private struct Pattern {
         let kind: String
-        let regex: String
+        let regex: CompiledPattern
+
+        init(kind: String, regex: String) {
+            self.kind = kind
+            self.regex = CompiledPattern(regex)
+        }
     }
 
     /// Ordered from most to least specific.
@@ -45,10 +50,12 @@ public struct ErrorDetector: Sendable {
     ]
 
     /// Lines that look like errors but are normal output.
-    private static let benign: [String] = [
+    private static let benign: [CompiledPattern] = [
         #"\b0 errors?\b"#, #"\bno errors?\b"#, #"error: 0\b"#, #"errors?: 0\b"#,
         #"\bwarning:"#, #"Build succeeded"#, #"BUILD SUCCEEDED"#, #"\bpassed\b"#, #"\bOK\b \("#
-    ]
+    ].map { CompiledPattern($0, caseInsensitive: true) }
+
+    private static let exceptionNamePattern = CompiledPattern(#"[A-Z]\w*(?:Error|Exception|Fault)\b"#)
 
     public init() {}
 
@@ -93,16 +100,16 @@ public struct ErrorDetector: Sendable {
     }
 
     static func kind(of line: String) -> String? {
-        patterns.first { line.range(of: $0.regex, options: .regularExpression) != nil }?.kind
+        patterns.first { $0.regex.matches(line) }?.kind
     }
 
     static func isBenign(_ line: String) -> Bool {
-        benign.contains { line.range(of: $0, options: [.regularExpression, .caseInsensitive]) != nil }
+        benign.contains { $0.matches(line) }
     }
 
     /// "TypeError: x is undefined" → "TypeError"; "java.lang.NullPointerException" → "NullPointerException".
     static func exceptionName(_ line: String) -> String? {
-        guard let range = line.range(of: #"[A-Z]\w*(?:Error|Exception|Fault)\b"#, options: .regularExpression) else { return nil }
+        guard let range = exceptionNamePattern.firstRange(in: line) else { return nil }
         return String(line[range])
     }
 }

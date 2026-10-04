@@ -70,7 +70,7 @@ public struct SensitiveFinding: Sendable, Equatable {
 
 /// Regex + checksum detection of secrets in recognized text.
 public struct SensitiveDataDetector: Sendable {
-    private static let patterns: [(SensitiveKind, String)] = [
+    private static let patterns: [(SensitiveKind, CompiledPattern)] = ([
         (.privateKey, #"-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----"#),
         (.awsAccessKey, #"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"#),
         (.githubToken, #"\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,})\b"#),
@@ -82,16 +82,16 @@ public struct SensitiveDataDetector: Sendable {
         (.password, #"(?i)\b(?:password|passwd|pwd|パスワード)\s*[:=：]\s*\S{4,}"#),
         (.email, #"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"#),
         (.phoneNumber, #"(?:\+81[\s\-]?|\b0)\d{1,4}[\s\-]\d{1,4}[\s\-]\d{3,4}\b|\(\d{3}\)\s?\d{3}-\d{4}\b"#)
-    ]
+    ] as [(SensitiveKind, String)]).map { ($0.0, CompiledPattern($0.1)) }
 
-    private static let cardCandidate = #"\b(?:\d[ \-]?){13,19}\b"#
+    private static let cardCandidate = CompiledPattern(#"\b(?:\d[ \-]?){13,19}\b"#)
 
     public init() {}
 
     /// Kinds found in `text` (each kind at most once).
     public func kinds(in text: String) -> [SensitiveKind] {
         var result: [SensitiveKind] = []
-        for (kind, pattern) in Self.patterns where text.range(of: pattern, options: .regularExpression) != nil {
+        for (kind, pattern) in Self.patterns where pattern.matches(text) {
             result.append(kind)
         }
         if containsCardNumber(text) { result.append(.creditCard) }
@@ -120,7 +120,7 @@ public struct SensitiveDataDetector: Sendable {
 
     func containsCardNumber(_ text: String) -> Bool {
         var searchRange = text.startIndex..<text.endIndex
-        while let range = text.range(of: Self.cardCandidate, options: .regularExpression, range: searchRange) {
+        while let range = Self.cardCandidate.firstRange(in: text, range: searchRange) {
             let digits = text[range].compactMap { $0.wholeNumberValue }
             if (13...19).contains(digits.count), Self.luhn(digits), Set(digits).count > 1 {
                 return true
