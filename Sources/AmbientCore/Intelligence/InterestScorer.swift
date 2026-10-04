@@ -40,7 +40,7 @@ public struct InterestScorer: Sendable {
             score -= 0.3
         }
 
-        if AppContextClassifier.classify(bundleIdentifier: context.bundleIdentifier) == .coding {
+        if AppContextClassifier.classify(context) == .coding {
             // Code, identifiers and logs are mostly English; wait for Coding Mode.
             score -= 0.15
         }
@@ -55,9 +55,18 @@ public struct InterestScorer: Sendable {
         if let region = candidate.region, region.minY < menuBarHeight {
             score -= 0.3
         }
-        if AppContextClassifier.classify(bundleIdentifier: context.bundleIdentifier) == .coding {
+        if AppContextClassifier.classify(context) == .coding {
             score += 0.04   // jargon is likely relevant while coding
         }
+        return InterestScore(score)
+    }
+
+    /// Errors are only worth explaining where the user is developing
+    /// (terminal, IDE, GitHub); an "Error" on a random web page is ignored.
+    public func scoreError(_ error: DetectedError, context: AnalysisContext) -> InterestScore {
+        guard AppContextClassifier.classify(context) == .coding else { return InterestScore(0.2) }
+        var score = 0.82
+        if let region = error.region, region.minY < menuBarHeight { score -= 0.3 }
         return InterestScore(score)
     }
 

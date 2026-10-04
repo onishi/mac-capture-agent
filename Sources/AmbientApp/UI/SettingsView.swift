@@ -119,7 +119,16 @@ struct SettingsView: View {
 
             Section("Developer") {
                 Toggle("Debug overlay", isOn: $settings.debugOverlay)
+                Toggle("Pretend the screen is being shared", isOn: $settings.pretendScreenSharing)
                 Text("Draws changed regions, OCR areas, router scores, counters and timings on screen. Never shows recognized text.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Screen sharing") {
+                Toggle("Warn about secrets while sharing the screen", isOn: $settings.warnSensitiveWhileSharing)
+                Toggle("Cover secrets while sharing (experimental)", isOn: $settings.redactWhileSharing)
+                Text("API keys, private keys, tokens, card numbers and passwords are detected on-device. Their values are never stored or shown. Text containing them is never translated or archived.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -131,7 +140,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 720)
+        .frame(width: 480, height: 780)
     }
 
     private func addBundleIdentifier() {

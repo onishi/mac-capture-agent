@@ -19,6 +19,9 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         static let memoryRetention = "memoryRetentionDays"
         static let debugOverlay = "debugOverlay"
         static let reasoning = "reasoningEnabled"
+        static let warnSensitive = "warnSensitiveWhileSharing"
+        static let redact = "redactWhileSharing"
+        static let pretendSharing = "pretendScreenSharing"
     }
 
     static let supportedTargetLanguages = ["ja", "en", "zh-Hans", "zh-Hant", "ko", "fr", "de", "es", "it", "pt"]
@@ -71,6 +74,18 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
     @Published var reasoningEnabled: Bool {
         didSet { defaults.set(reasoningEnabled, forKey: Key.reasoning) }
     }
+    /// Warn when secrets appear on screen while it is being shared.
+    @Published var warnSensitiveWhileSharing: Bool {
+        didSet { defaults.set(warnSensitiveWhileSharing, forKey: Key.warnSensitive) }
+    }
+    /// Experimental: cover secrets with opaque boxes while sharing.
+    @Published var redactWhileSharing: Bool {
+        didSet { defaults.set(redactWhileSharing, forKey: Key.redact) }
+    }
+    /// Developer: behave as if the screen were shared (to test warnings).
+    @Published var pretendScreenSharing: Bool {
+        didSet { defaults.set(pretendScreenSharing, forKey: Key.pretendSharing) }
+    }
     /// Developer overlay: regions, router scores and timings (never text).
     @Published var debugOverlay: Bool {
         didSet { defaults.set(debugOverlay, forKey: Key.debugOverlay) }
@@ -95,6 +110,9 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         memoryRetentionDays = Self.retentionChoices.contains(retention) ? retention : 7
         debugOverlay = defaults.bool(forKey: Key.debugOverlay)
         reasoningEnabled = defaults.object(forKey: Key.reasoning) as? Bool ?? true
+        warnSensitiveWhileSharing = defaults.object(forKey: Key.warnSensitive) as? Bool ?? true
+        redactWhileSharing = defaults.bool(forKey: Key.redact)
+        pretendScreenSharing = defaults.bool(forKey: Key.pretendSharing)
     }
 
     // MARK: Personalization (aggregated weights only, never screen content)
@@ -128,6 +146,8 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
             briefingEnabled: briefingEnabled,
             memoryEnabled: memoryEnabled,
             reasoningEnabled: reasoningEnabled,
+            warnSensitiveWhileSharing: warnSensitiveWhileSharing,
+            redactWhileSharing: redactWhileSharing,
             debugOverlay: debugOverlay
         )
     }

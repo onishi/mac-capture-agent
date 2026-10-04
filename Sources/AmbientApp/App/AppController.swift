@@ -22,6 +22,8 @@ final class AppController: ObservableObject {
     private let capture = ScreenCaptureManager()
     private let overlay = OverlayWindowController()
     private let debugOverlay = DebugOverlayController()
+    private let redactionOverlay = RedactionOverlayController()
+    private let screenShare = ScreenShareMonitor()
     /// Opens the archive with a query (set by the app delegate).
     var openArchive: ((String) -> Void)?
     private let translationBridge = TranslationBridge()
@@ -64,6 +66,8 @@ final class AppController: ObservableObject {
         overlay.onHover = { [weak self] message in
             self?.recordFeedback(.openedDetails, for: message)
         }
+        screenShare.setPretend(settings.pretendScreenSharing)
+        screenShare.start()
         overlay.onAction = { [weak self] action, message in
             self?.handleHUDAction(action, for: message)
         }
@@ -291,6 +295,7 @@ final class AppController: ObservableObject {
         runningConfiguration = nil
         runningDisplayID = nil
         debugOverlay.hide()
+        redactionOverlay.clear()
         displayFollowTask?.cancel()
         displayFollowTask = nil
         let capture = self.capture
@@ -298,6 +303,7 @@ final class AppController: ObservableObject {
     }
 
     private func settingsDidChange() {
+        screenShare.setPretend(settings.pretendScreenSharing)
         let store = memoryStore
         let retention = settings.memoryRetentionDays
         let language = settings.targetLanguage
@@ -354,6 +360,8 @@ final class AppController: ObservableObject {
             briefingProvider: briefingProvider,
             store: memoryStore,
             reasoner: reasoner,
+            screenShare: screenShare,
+            displayID: displayID,
             present: { event in
                 await MainActor.run { [weak self] in
                     switch event {
@@ -369,6 +377,8 @@ final class AppController: ObservableObject {
                         overlay.updateBriefing(text, for: messageID)
                     case .diagnostics(let diagnostics, let counters):
                         self?.debugOverlay.update(diagnostics, counters: counters, on: NSScreen.screen(for: displayID))
+                    case .redact(let rects):
+                        self?.redactionOverlay.cover(rects, on: NSScreen.screen(for: displayID))
                     }
                 }
             }

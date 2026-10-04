@@ -102,7 +102,7 @@ struct ArchiveView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(Self.timeFormatter.string(from: entry.timestamp))
                     .foregroundStyle(SpyTheme.textSecondary)
-                Text(entry.kind == .explanation ? "TERM" : HUDCodename.route(source: entry.sourceLanguage, target: entry.targetLanguage))
+                Text(Self.routeLabel(entry))
                     .foregroundStyle(SpyTheme.accent)
                 Text((entry.application ?? "—").uppercased())
                     .foregroundStyle(SpyTheme.textSecondary.opacity(0.8))
@@ -155,6 +155,15 @@ struct ArchiveView: View {
         .onHover { inside in hoveredID = inside ? entry.id : (hoveredID == entry.id ? nil : hoveredID) }
         .onTapGesture { model.open(entry) }
         .help("Click to copy the translation")
+    }
+
+    private static func routeLabel(_ entry: VisualMemoryEntry) -> String {
+        switch entry.kind {
+        case .translation: return HUDCodename.route(source: entry.sourceLanguage, target: entry.targetLanguage)
+        case .explanation: return "TERM"
+        case .errorAnalysis: return "FAULT"
+        case .codeSummary: return "CODE"
+        }
     }
 
     private var footer: some View {

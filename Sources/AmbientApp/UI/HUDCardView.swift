@@ -58,7 +58,7 @@ struct HUDCardView: View {
         )
         .overlay(
             CornerBrackets(length: SpyTheme.cornerTick)
-                .stroke(SpyTheme.accent, style: StrokeStyle(lineWidth: 1.6, lineCap: .square))
+                .stroke(tint, style: StrokeStyle(lineWidth: 1.6, lineCap: .square))
                 .padding(-3)
         )
         .compositingGroup()
@@ -71,13 +71,20 @@ struct HUDCardView: View {
 
     private var actionBar: some View {
         HStack(spacing: 6) {
-            actionButton("COPY", .copy)
-            actionButton("ARCHIVE", .openArchive)
-            actionButton("NOT USEFUL", .notUseful)
-            if message.kind == .explanation {
+            if message.kind != .securityWarning {
+                actionButton("COPY", .copy)
+                actionButton("ARCHIVE", .openArchive)
+                actionButton("NOT USEFUL", .notUseful)
+            }
+            switch message.kind {
+            case .explanation:
                 actionButton("KNOWN", .markKnown)
-            } else if let language = message.sourceLanguage {
-                actionButton("MUTE \(LanguageCode.base(language).uppercased())", .skipLanguage)
+            case .translation:
+                if let language = message.sourceLanguage {
+                    actionButton("MUTE \(LanguageCode.base(language).uppercased())", .skipLanguage)
+                }
+            case .errorAnalysis, .codeSummary, .securityWarning:
+                EmptyView()
             }
             Spacer(minLength: 0)
             actionButton("✕", .close)
@@ -107,12 +114,40 @@ struct HUDCardView: View {
         .help(action.help)
     }
 
+    private var headerTitle: String {
+        switch message.kind {
+        case .translation: return "INTERCEPT // LINGUISTIC"
+        case .explanation: return "INTEL // TERMINOLOGY"
+        case .errorAnalysis: return "ALERT // FAULT ANALYSIS"
+        case .codeSummary: return "INTEL // CODE ANALYSIS"
+        case .securityWarning: return "⚠ WARNING // EXPOSURE RISK"
+        }
+    }
+
+    private var chipTitle: String {
+        switch message.kind {
+        case .translation: return HUDCodename.route(source: message.sourceLanguage, target: message.targetLanguage)
+        case .explanation: return "TERM"
+        case .errorAnalysis: return "FAULT"
+        case .codeSummary: return "CODE"
+        case .securityWarning: return "SHARING"
+        }
+    }
+
+    /// Faults and exposure warnings use the alert color.
+    private var tint: Color {
+        switch message.kind {
+        case .errorAnalysis, .securityWarning: return SpyTheme.alert
+        case .translation, .explanation, .codeSummary: return SpyTheme.accent
+        }
+    }
+
     private var header: some View {
         HStack(spacing: 6) {
             Text("◢")
-                .foregroundStyle(SpyTheme.accent)
-            Text(message.kind == .explanation ? "INTEL // TERMINOLOGY" : "INTERCEPT // LINGUISTIC")
-                .foregroundStyle(SpyTheme.accent.opacity(0.9))
+                .foregroundStyle(tint)
+            Text(headerTitle)
+                .foregroundStyle(tint.opacity(0.9))
             Spacer(minLength: 8)
             Circle()
                 .fill(SpyTheme.alert)
@@ -125,7 +160,7 @@ struct HUDCardView: View {
         .tracking(1.4)
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
-        .background(SpyTheme.accent.opacity(0.09))
+        .background(tint.opacity(0.1))
         .overlay(alignment: .bottom) {
             Rectangle().fill(SpyTheme.accentDim).frame(height: 0.75)
         }
@@ -135,7 +170,7 @@ struct HUDCardView: View {
         HStack(spacing: 10) {
             Text(HUDCodename.targetCode(for: message.id))
                 .foregroundStyle(SpyTheme.textSecondary)
-            Text(message.kind == .explanation ? "TERM" : HUDCodename.route(source: message.sourceLanguage, target: message.targetLanguage))
+            Text(chipTitle)
                 .foregroundStyle(SpyTheme.accent)
                 .padding(.horizontal, 5)
                 .padding(.vertical, 1)

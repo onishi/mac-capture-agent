@@ -13,6 +13,7 @@
 | v0.3 | SF スパイ映画風 HUD、Apple Intelligence による一行補足（BRIEF） | ✅ CI 済 |
 | v0.4 | Visual Memory（表示した Intel の記録）、自然言語検索、Archive 画面（⌥⌘K） | ✅ CI 済 |
 | v0.5 | M0 の準備（Debug overlay・Signpost・チェックリスト）と M1 全項目（SQLite/GRDB、More 操作、専門用語の解説、Knowledge Cache、固有名詞、再登場通知、LLM ルーター、明日まで停止） | ✅ CI 済 / 実機待ち |
+| v0.6 | M2 全項目（Coding Mode、エラー解析、コード説明、秘密情報検出、画面共有中の警告、実験的な黒塗り） | ✅ CI 済 / 実機待ち |
 
 **最大のリスクは「実機で一度も動かしていない」こと。** 次の作業は機能追加ではなく実機検証（M0）とする。
 

@@ -7,6 +7,8 @@ import CoreGraphics
 public enum SuggestedAction: String, Sendable, Equatable, Codable {
     case translate
     case explainTerm
+    case explainError
+    case explainCode
     case identifyAnimal
     case identifyPlant
     case identifyLandmark

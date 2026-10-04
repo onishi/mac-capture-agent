@@ -1,3 +1,4 @@
+import CoreGraphics
 import CoreVideo
 import Foundation
 
@@ -12,6 +13,10 @@ struct PipelineConfiguration: Sendable, Equatable {
     var memoryEnabled: Bool
     /// Technical-term explanations and LLM judgement of borderline candidates (Apple Intelligence).
     var reasoningEnabled: Bool = true
+    /// Warn when secrets appear while the screen is shared.
+    var warnSensitiveWhileSharing: Bool = true
+    /// Experimental: cover secrets with opaque boxes while the screen is shared.
+    var redactWhileSharing: Bool = false
     /// Draw changed regions, OCR areas, router scores and timings on screen.
     var debugOverlay: Bool = false
 }
@@ -22,7 +27,11 @@ enum HUDEvent: Sendable {
     case briefing(messageID: UUID, text: String?)
     /// Debug overlay data (geometry, scores, timings — never text).
     case diagnostics(PipelineDiagnostics, PipelineCounters)
+    /// Normalized rects to cover while sharing (experimental); empty clears.
+    case redact([CGRect])
 }
+
+typealias PipelineReasoner = TermExplaining & RouterJudging & DeveloperAssisting
 
 /// How a routed action ended, for counters and diagnostics.
 private enum IntelOutcome {
@@ -54,7 +63,13 @@ actor AnalysisPipeline {
     private let present: Presenter
     private let briefingProvider: (any BriefingProvider)?
     private let store: IntelStore
-    private let reasoner: (any TermExplaining & RouterJudging)?
+    private let reasoner: (any PipelineReasoner)?
+    private let screenShare: ScreenShareMonitor
+    private let displayID: CGDirectDisplayID
+    private let sensitiveDetector = SensitiveDataDetector()
+    private var warningCooldown = CooldownCache(duration: 60)
+    private var dwellTracker = PointerDwellTracker()
+    private var pendingDwellRegion: CGRect?
     /// On-device LLM calls (explanations, routing) are rate-limited.
     private var llmLimiter = RateLimiter(minimumInterval: 8)
     private let briefingTimeout: Duration = .seconds(5)
@@ -78,7 +93,9 @@ actor AnalysisPipeline {
         foreground: ForegroundContextProvider,
         briefingProvider: (any BriefingProvider)?,
         store: IntelStore,
-        reasoner: (any TermExplaining & RouterJudging)?,
+        reasoner: (any PipelineReasoner)?,
+        screenShare: ScreenShareMonitor,
+        displayID: CGDirectDisplayID,
         present: @escaping Presenter
     ) {
         self.configuration = configuration
@@ -101,6 +118,8 @@ actor AnalysisPipeline {
         self.briefingProvider = configuration.briefingEnabled ? briefingProvider : nil
         self.store = store
         self.reasoner = configuration.reasoningEnabled ? reasoner : nil
+        self.screenShare = screenShare
+        self.displayID = displayID
     }
 
     /// Consumes frames until the stream finishes or the task is cancelled.
@@ -129,6 +148,14 @@ actor AnalysisPipeline {
             Log.privacy.info("Analysis resumed")
         }
 
+        // Interest Region: in Coding Mode, a pointer resting for 2 s asks for a code summary.
+        if activeReasoner != nil,
+           AppContextClassifier.classify(bundleIdentifier: app.bundleIdentifier) == .coding,
+           let pointer = pointerPosition(),
+           let dwell = dwellTracker.update(position: pointer, at: frame.timestamp) {
+            pendingDwellRegion = PointerDwellTracker.region(around: dwell)
+        }
+
         guard let gray = FrameConverter.grayscale(from: frame.pixelBuffer) else {
             Log.pipeline.error("Unsupported pixel buffer")
             return
@@ -137,6 +164,12 @@ actor AnalysisPipeline {
         // The first frame only establishes a baseline: what was already on
         // screen at launch is not announced.
         guard let previous = await frameBuffer.push(current) else { return }
+
+        if let dwellRegion = pendingDwellRegion {
+            pendingDwellRegion = nil
+            let outcome = await explainCode(in: dwellRegion, frame: current, app: app)
+            if outcome == .shown { counters.hudsShown += 1 }
+        }
 
         counters.framesChecked += 1
         let detectStart = clock.now
@@ -188,6 +221,12 @@ actor AnalysisPipeline {
         diagnostics.textBlockCount = blocks.count
         Log.vision.debug("OCR finished: \(lines.count) line(s), \(blocks.count) block(s)")
 
+        // Secrets are never translated, explained or archived; while sharing they trigger a warning.
+        let (safeBlocks, findings) = sensitiveDetector.partition(blocks)
+        if !findings.isEmpty {
+            await handleSensitive(findings, timestamp: frame.timestamp)
+        }
+
         let classifyStart = clock.now
         let categories = await classifyIfUseful(regions: padded, textBlocks: blocks, frame: frame)
         if !categories.isEmpty {
@@ -198,7 +237,7 @@ actor AnalysisPipeline {
             appName: app.appName,
             bundleIdentifier: app.bundleIdentifier,
             windowTitle: windowTitle,
-            textRegions: blocks,
+            textRegions: safeBlocks,
             visualCategories: categories
         )
         let routeStart = clock.now
@@ -219,7 +258,7 @@ actor AnalysisPipeline {
                     diagnostics.timings["llm"] = Self.milliseconds(clock.now - llmStart)
                     if show { action = RouterEscalation.apply(show: true, to: candidate) }
                 }
-            case .identifyAnimal, .identifyPlant, .identifyLandmark, .identifyPerson, .ignore:
+            case .explainError, .explainCode, .identifyAnimal, .identifyPlant, .identifyLandmark, .identifyPerson, .ignore:
                 break
             }
         }
@@ -241,6 +280,12 @@ actor AnalysisPipeline {
             outcome = await explainTerm(action, app: app, windowTitle: windowTitle, timestamp: frame.timestamp)
             Log.signposter.endInterval("explain", signpost)
             diagnostics.timings["explain"] = Self.milliseconds(clock.now - explainStart)
+        case .explainError:
+            let explainStart = clock.now
+            outcome = await explainError(action, app: app, windowTitle: windowTitle, timestamp: frame.timestamp)
+            diagnostics.timings["explain"] = Self.milliseconds(clock.now - explainStart)
+        case .explainCode:
+            break   // triggered by pointer dwell, not by the router
         case .identifyAnimal, .identifyPlant, .identifyLandmark, .identifyPerson:
             // Not implemented yet (the router keeps them below the show threshold).
             break
@@ -342,7 +387,113 @@ actor AnalysisPipeline {
         }
     }
 
-    private var activeReasoner: (any TermExplaining & RouterJudging)? {
+    // MARK: Coding Mode
+
+    /// Explains an error seen in a terminal / IDE / GitHub.
+    private func explainError(_ candidate: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval) async -> IntelOutcome {
+        guard let reasoner = activeReasoner, let line = candidate.payload else { return .discarded }
+        let key = CooldownCache.key(action: .explainError, payload: line)
+        guard !cooldown.isCoolingDown(key, now: timestamp) else { return .cooldown }
+        guard llmLimiter.allow(now: timestamp) else { return .discarded }
+        do {
+            let raw = try await reasoner.explainError(line, context: candidate.context ?? line, targetLanguage: configuration.targetLanguage)
+            guard let explanation = DeveloperOutputSanitizer.sanitize(raw, errorLine: line) else { return .discarded }
+            cooldown.record(key, now: timestamp)
+            let kind = ErrorDetector().detect(in: line)?.kind ?? "Error"
+            let detail = explanation.fix.map { "\(explanation.cause)\n▸ \($0)" } ?? explanation.cause
+            let message = HUDMessage(
+                kind: .errorAnalysis,
+                title: kind,
+                original: line,
+                detail: detail,
+                anchor: candidate.region,
+                features: PersonalizationFeatures(action: .explainError, language: nil, bundleIdentifier: app.bundleIdentifier),
+                targetLanguage: configuration.targetLanguage
+            )
+            await present(.show(message, briefingPending: false))
+            await rememberIfEnabled(message, app: app, windowTitle: windowTitle, entities: [])
+            Log.pipeline.info("Error explained")
+            return .shown
+        } catch {
+            Log.pipeline.error("Error explanation failed: \(String(describing: error), privacy: .public)")
+            return .failed
+        }
+    }
+
+    /// Summarizes the code around a pointer dwell.
+    private func explainCode(in region: CGRect, frame: AnalyzableFrame, app: ForegroundContextProvider.Snapshot) async -> IntelOutcome {
+        guard let reasoner = activeReasoner else { return .discarded }
+        let lines = await ocr.recognizeText(in: frame.pixelBuffer, regions: [ChangedRegion(rect: region, confidence: 1)])
+        let code = lines
+            .sorted { $0.boundingBox.minY < $1.boundingBox.minY }
+            .map(\.text)
+            .joined(separator: "\n")
+        guard code.count >= 40, DeveloperOutputSanitizer.looksLikeCode(code),
+              sensitiveDetector.kinds(in: code).isEmpty else { return .discarded }
+        let key = CooldownCache.key(action: .explainCode, payload: String(code.prefix(200)))
+        guard !cooldown.isCoolingDown(key, now: frame.timestamp), llmLimiter.allow(now: frame.timestamp) else { return .cooldown }
+        do {
+            let raw = try await reasoner.summarizeCode(code, targetLanguage: configuration.targetLanguage)
+            guard let summary = DeveloperOutputSanitizer.sanitize(raw) else { return .discarded }
+            cooldown.record(key, now: frame.timestamp)
+            let firstLine = code.split(separator: "\n").first.map { String($0.prefix(80)) } ?? ""
+            let message = HUDMessage(
+                kind: .codeSummary,
+                title: "CODE",
+                original: firstLine,
+                detail: summary.summary,
+                anchor: region,
+                features: PersonalizationFeatures(action: .explainCode, language: nil, bundleIdentifier: app.bundleIdentifier),
+                targetLanguage: configuration.targetLanguage
+            )
+            await present(.show(message, briefingPending: false))
+            Log.pipeline.info("Code summarized (\(code.count) chars)")
+            return .shown
+        } catch {
+            Log.pipeline.error("Code summary failed: \(String(describing: error), privacy: .public)")
+            return .failed
+        }
+    }
+
+    /// Pointer position normalized to the captured display (top-left origin), via
+    /// CoreGraphics so it can be read off the main thread.
+    private func pointerPosition() -> CGPoint? {
+        guard let location = CGEvent(source: nil)?.location else { return nil }
+        let bounds = CGDisplayBounds(displayID)
+        guard bounds.width > 0, bounds.height > 0, bounds.contains(location) else { return nil }
+        return CGPoint(x: (location.x - bounds.minX) / bounds.width, y: (location.y - bounds.minY) / bounds.height)
+    }
+
+    // MARK: Sensitive data
+
+    private func handleSensitive(_ findings: [SensitiveFinding], timestamp: TimeInterval) async {
+        Log.privacy.info("Sensitive data detected: \(findings.count) item(s)")
+        guard screenShare.isSharing else { return }
+        let high = findings.filter { $0.kind.isHighSeverity }
+        guard !high.isEmpty else { return }
+        if configuration.redactWhileSharing {
+            await present(.redact(high.compactMap(\.region)))
+        }
+        guard configuration.warnSensitiveWhileSharing,
+              let first = high.first,
+              warningCooldown.checkAndRecord("warn:\(first.kind.rawValue)", now: timestamp) else { return }
+        let japanese = LanguageCode.base(configuration.targetLanguage) == "ja"
+        let kinds = Array(Set(high.map(\.kind))).sorted { $0.rawValue < $1.rawValue }
+        let names = kinds.map { japanese ? $0.japaneseLabel : $0.label }.joined(separator: japanese ? "、" : ", ")
+        let message = HUDMessage(
+            kind: .securityWarning,
+            title: japanese ? "機密情報" : "Sensitive information",
+            original: japanese ? "画面共有中" : "Screen sharing is on",
+            detail: japanese ? "\(names) が表示されています" : "\(names) is visible on screen",
+            anchor: first.region,
+            targetLanguage: configuration.targetLanguage
+        )
+        await present(.show(message, briefingPending: false))
+        counters.hudsShown += 1
+        Log.privacy.info("Sensitive data warning shown")
+    }
+
+    private var activeReasoner: (any PipelineReasoner)? {
         guard let reasoner, reasoner.isAvailable else { return nil }
         return reasoner
     }
@@ -409,11 +560,19 @@ actor AnalysisPipeline {
 
     private func rememberIfEnabled(_ message: HUDMessage, app: ForegroundContextProvider.Snapshot, windowTitle: String?, entities: [ExtractedEntity]) async {
         guard configuration.memoryEnabled else { return }
+        guard message.kind != .securityWarning else { return }
         let isExplanation = message.kind == .explanation
+        let kind: VisualMemoryEntry.Kind
+        switch message.kind {
+        case .translation, .securityWarning: kind = .translation
+        case .explanation: kind = .explanation
+        case .errorAnalysis: kind = .errorAnalysis
+        case .codeSummary: kind = .codeSummary
+        }
         await store.remember(VisualMemoryEntry(
             id: message.id,
             timestamp: message.capturedAt,
-            kind: isExplanation ? .explanation : .translation,
+            kind: kind,
             application: app.appName,
             bundleIdentifier: app.bundleIdentifier,
             windowTitle: windowTitle,

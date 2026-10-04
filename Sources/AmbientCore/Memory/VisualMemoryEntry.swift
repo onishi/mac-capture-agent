@@ -6,6 +6,8 @@ public struct VisualMemoryEntry: Sendable, Equatable, Codable, Identifiable {
     public enum Kind: String, Sendable, Codable {
         case translation
         case explanation
+        case errorAnalysis
+        case codeSummary
     }
 
     public let id: UUID

@@ -65,7 +65,7 @@ macOS 上でユーザーが見ている画面を継続的に観察し、AI が�
 | SI-5 | 認識対象: テキスト | ✅ | Vision OCR |
 | SI-6 | 認識対象: 動物・植物・食品・ランドマーク・人物（粗分類） | 🟡 | `VNClassifyImageRequest` の粗分類のみ、表示には未使用 |
 | SI-7 | 認識対象: 商品・ロゴ・グラフ・地図・UI | ⬜ | |
-| SI-8 | 認識対象: ソースコード・エラーメッセージ | ⬜ | Coding Mode（§3.6） |
+| SI-8 | 認識対象: ソースコード・エラーメッセージ | ✅ | Coding Mode（§3.6） |
 | SI-9 | 認識対象: QR コード・URL・日付・金額 | ⬜ | Vision バーコード検出、`NSDataDetector` で実現可能 |
 
 ### 3.2 自動アクション: 翻訳
@@ -108,18 +108,18 @@ macOS 上でユーザーが見ている画面を継続的に観察し、AI が�
 
 | ID | 要件 | 状態 | 備考 |
 | --- | --- | --- | --- |
-| CD-1 | VS Code / Terminal / GitHub などを検出して開発支援モードへ切替 | 🟡 | アプリの判定（`AppContextClassifier`）のみ |
-| CD-2 | 表示中のコードの説明 | ⬜ | ホバーで長く止まった領域だけを対象にする |
-| CD-3 | Terminal のエラーを検出し原因候補を表示 | ⬜ | |
-| CD-4 | 正常なログは解析しない | ⬜ | |
+| CD-1 | VS Code / Terminal / GitHub などを検出して開発支援モードへ切替 | ✅ | アプリに加え、ブラウザのタイトル（GitHub / GitLab / Stack Overflow 等）でも判定。Coding Mode では翻訳を減点し、用語解説はしない |
+| CD-2 | 表示中のコードの説明 | ✅ | Coding Mode でポインタが 2 秒止まった周辺だけを OCR し、Foundation Models で 1〜3 ステップに要約 |
+| CD-3 | Terminal のエラーを検出し原因候補を表示 | ✅ | `ErrorDetector`（Python / JS / Swift / Rust / Go / Java / npm / git / shell 等）＋ Foundation Models で原因と次の一手 |
+| CD-4 | 正常なログは解析しない | ✅ | `0 errors`・警告・ビルド成功・テスト成功を除外（テストコーパスで確認） |
 
 ### 3.7 セキュリティ支援
 
 | ID | 要件 | 状態 | 備考 |
 | --- | --- | --- | --- |
-| SC-1 | 秘密情報の検出: API Key・Password・Token・秘密鍵・クレジットカード番号・メール・電話・住所・給与・個人番号 | ⬜ | 正規表現＋チェックサム（Luhn 等） |
-| SC-2 | 画面共有中に検出したら警告（`⚠ Sensitive Information`） | ⬜ | |
-| SC-3 | 画面共有中（Zoom / Meet / Teams）の自動ぼかし | ⬜ | オーバーレイで隠す方式。共有ツール側の取り込み方に依存するため実験扱い |
+| SC-1 | 秘密情報の検出: API Key・Password・Token・秘密鍵・クレジットカード番号・メール・電話・住所・給与・個人番号 | 🟡 | API キー各種・秘密鍵・JWT・カード（Luhn）・パスワード・メール・電話。住所・給与・個人番号は未対応。検出した文は翻訳・解説・記録しない |
+| SC-2 | 画面共有中に検出したら警告（`⚠ Sensitive Information`） | ✅ | 共有はインジケータのウィンドウ名から推定（ヒューリスティック）。重要度の高い種類だけ警告、種類ごとに 60 秒クールダウン |
+| SC-3 | 画面共有中（Zoom / Meet / Teams）の自動ぼかし | 🟡 | 実験機能（既定オフ）: 不透明な矩形で覆う。8 秒で自動解除。共有ツールが取り込むかは実機確認待ち |
 
 ### 3.8 Visual Memory（記憶と検索）
 
@@ -136,7 +136,7 @@ macOS 上でユーザーが見ている画面を継続的に観察し、AI が�
 
 | ID | 要件 | 状態 | 備考 |
 | --- | --- | --- | --- |
-| CX-1 | マウス注目領域（同じ領域に 2 秒以上 → Interest Region として優先解析） | ⬜ | ポインタ位置は権限不要で取得可能 |
+| CX-1 | マウス注目領域（同じ領域に 2 秒以上 → Interest Region として優先解析） | 🟡 | `PointerDwellTracker`。現在は Coding Mode のコード説明にのみ使用 |
 | CX-2 | 作業コンテキスト（複数アプリをまたぐ一連の作業を 1 セッションに） | ⬜ | |
 | CX-3 | 作業復元（「昨日の続き」の提示） | ⬜ | |
 | CX-4 | デイリーサマリー（今日の主なテーマと時間） | ⬜ | 任意機能 |
@@ -146,7 +146,7 @@ macOS 上でユーザーが見ている画面を継続的に観察し、AI が�
 | ID | 要件 | 状態 | 備考 |
 | --- | --- | --- | --- |
 | RT-1 | 「何があるか」ではなく「何を調べる価値があるか」を判定 | ✅ | ルールベース |
-| RT-2 | アクション: translate / identify_person / identify_animal / identify_plant / identify_landmark / explain_term / explain_error / identify_product / ignore | 🟡 | explain_error・identify_product は未定義 |
+| RT-2 | アクション: translate / identify_person / identify_animal / identify_plant / identify_landmark / explain_term / explain_error / identify_product / ignore | 🟡 | explain_error と explain_code を追加。identify_product は未定義 |
 | RT-3 | ignore を優先、当たり前の情報を避ける | ✅ | |
 | RT-4 | 出力は構造化（action / confidence / importance / region） | ✅ | `RoutedAction` |
 | RT-5 | LLM ベースのルーター（§10 のプロンプト） | ✅ | スコア 0.5〜0.7 の候補だけを Foundation Models（`@Generable`）で判定。8 秒に 1 回まで |

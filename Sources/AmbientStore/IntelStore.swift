@@ -268,7 +268,7 @@ actor IntelStore: VisualMemoryStore {
             VALUES (?, ?, ?, ?, ?, ?, ?, 1.0, ?)
             """, arguments: [id, entry.timestamp.timeIntervalSince1970, entry.application, entry.bundleIdentifier,
                              entry.windowTitle, entry.url?.absoluteString,
-                             entry.kind == .translation ? "foreign_text" : "term", entry.original])
+                             Self.category(for: entry.kind), entry.original])
         try db.execute(sql: """
             INSERT OR REPLACE INTO intel (id, observation_id, kind, body, briefing, source_lang, target_lang, importance, features)
             VALUES (?, ?, ?, ?, ?, ?, ?, 1.0, ?)
@@ -283,6 +283,15 @@ actor IntelStore: VisualMemoryStore {
             try db.execute(sql: """
                 INSERT OR REPLACE INTO embedding (owner_type, owner_id, model, vector) VALUES ('intel', ?, ?, ?)
                 """, arguments: [id, model, VectorCoding.data(from: vector)])
+        }
+    }
+
+    private static func category(for kind: VisualMemoryEntry.Kind) -> String {
+        switch kind {
+        case .translation: return "foreign_text"
+        case .explanation: return "term"
+        case .errorAnalysis: return "error"
+        case .codeSummary: return "code"
         }
     }
 

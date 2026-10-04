@@ -18,10 +18,26 @@ public enum AppContextClassifier {
         "com.apple.TV", "com.apple.QuickTimePlayerX", "org.videolan.vlc", "com.netflix.Netflix", "io.iina"
     ]
 
-    public static func classify(bundleIdentifier: String?) -> AppContextKind {
+    public static let browserBundleIdentifiers: Set<String> = [
+        "com.apple.Safari", "com.google.Chrome", "org.mozilla.firefox", "company.thebrowser.Browser",
+        "com.microsoft.edgemac", "com.brave.Browser", "com.vivaldi.Vivaldi", "com.operasoftware.Opera"
+    ]
+
+    /// Window titles of developer sites that switch a browser into Coding Mode.
+    static let codingTitleKeywords = ["github", "gitlab", "bitbucket", "stack overflow", "pull request"]
+
+    public static func classify(bundleIdentifier: String?, windowTitle: String? = nil) -> AppContextKind {
         guard let bundleIdentifier else { return .general }
         if codingBundleIdentifiers.contains(bundleIdentifier) { return .coding }
         if mediaBundleIdentifiers.contains(bundleIdentifier) { return .media }
+        if browserBundleIdentifiers.contains(bundleIdentifier), let title = windowTitle?.lowercased(),
+           codingTitleKeywords.contains(where: { title.contains($0) }) {
+            return .coding
+        }
         return .general
+    }
+
+    public static func classify(_ context: AnalysisContext) -> AppContextKind {
+        classify(bundleIdentifier: context.bundleIdentifier, windowTitle: context.windowTitle)
     }
 }

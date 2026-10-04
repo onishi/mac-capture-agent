@@ -1,4 +1,4 @@
-# Ambient Screen Intelligence (v0.5-dev)
+# Ambient Screen Intelligence (v0.6)
 
 ユーザーが見ている画面を AI も一緒に見て、**本当に価値があるときだけ**静かに補足情報を出す macOS メニューバーアプリです。
 
@@ -125,6 +125,12 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **AI Router（ignore-first）**: ルールベースの `InterestScorer` で 0.0〜1.0 のスコアを付け、0.7 以上のものだけ表示。メニューバー領域の文字やコーディングアプリでは減点
 - **Cooldown**: 同じ内容は 5 分間再表示しない（OCR の揺れを吸収する正規化キー）
 - **HUD**: 透明・最前面・クリック透過の `NSPanel` + SwiftUI。fade in 300ms → 3〜6 秒表示 → fade out 400ms。画面右上に表示
+- **Coding Mode（v0.6）**: VS Code・Xcode・ターミナル、またはブラウザで GitHub / GitLab / Stack Overflow を開いているときに切り替わる
+  - **エラー解析**: Python / JavaScript / Swift / Rust / Go / Java / npm / git / シェルの代表的なエラーを検出し、Apple Intelligence が原因候補と次の一手を `ALERT // FAULT ANALYSIS` に表示。`0 errors`・警告・ビルド成功などの正常ログには反応しない
+  - **コード説明**: ポインタを 2 秒止めた周辺のコードを読み取り、何をしているかを 1〜3 ステップで要約（`INTEL // CODE ANALYSIS`）
+- **秘密情報の保護（v0.6）**: API キー（AWS / GitHub / Slack / Google / Stripe / LLM 各社）・秘密鍵・JWT・カード番号（Luhn 検証）・パスワード・メール・電話番号を端末内で検出。値は保存も表示もしない。含まれる文は翻訳・解説・記録の対象外
+  - **画面共有中の警告**: Zoom / Meet / Teams などの共有インジケータから共有中を推定し、重要度の高い秘密情報が映ったら `⚠ WARNING // EXPOSURE RISK` を表示
+  - **黒塗り（実験的、既定オフ）**: 共有中、検出した箇所を不透明な矩形で覆う
 - **専門用語の解説（v0.5, Apple Intelligence）**: 略語（RAG・CRDT など）や長いカタカナ語を候補にし、説明する価値があるかと 2 行の説明を Foundation Models が判断・生成する（一般語・固有名詞は説明しない）。結果は 30 日キャッシュ。HUD の KNOWN か、3 回表示した用語は今後説明しない
 - **LLM ルーター（v0.5, Apple Intelligence）**: ルールで判断が割れる候補（スコア 0.5〜0.7）だけをオンデバイス LLM に「今出す価値があるか」判定させる。8 秒に 1 回まで
 - **再登場通知（v0.5）**: HUD に出した内容の固有名詞（NLTagger の人名・組織名・地名）や用語が 1 日以上前にも出ていたら `SEEN ▸ 3日前にも表示されています` を添える
@@ -149,7 +155,7 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **Pause / Resume**: 5 分・30 分・無期限。停止中はキャプチャ自体を止める
 - **Privacy**: 除外アプリ（1Password などのパスワードマネージャー、メッセージ、写真）とパスワード系ウィンドウタイトルでは解析しない
 - **Performance Mode**: Battery / Balanced / Performance（キャプチャ 5/15/30fps、Vision 0.5/1/2fps）
-- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization、DecodeEffect、Briefing、VisualMemory、PauseSchedule、Diagnostics、TermExtractor、IntelStore など 119 件（うちストア 11 件は macOS のみ）
+- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization、DecodeEffect、Briefing、VisualMemory、PauseSchedule、Diagnostics、TermExtractor、IntelStore、ErrorDetector、SensitiveDataDetector など 133 件（うちストア 11 件は macOS のみ）
 
 ## プロジェクト構成
 

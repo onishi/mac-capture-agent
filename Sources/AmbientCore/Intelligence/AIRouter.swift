@@ -9,6 +9,7 @@ public final class AIRouter: Sendable {
     private let scorer: InterestScorer
     private let adjuster: any InterestAdjusting
     private let termExtractor = TermExtractor()
+    private let errorDetector = ErrorDetector()
 
     public init(
         detector: ForeignTextDetector,
@@ -51,7 +52,24 @@ public final class AIRouter: Sendable {
             ))
         }
 
-        for term in termExtractor.candidates(in: context.textRegions) {
+        if let error = errorDetector.detect(in: context.textRegions) {
+            let features = PersonalizationFeatures(action: .explainError, language: nil, bundleIdentifier: context.bundleIdentifier)
+            let score = adjuster.adjust(scorer.scoreError(error, context: context), features: features)
+            result.append(RoutedAction(
+                action: .explainError,
+                confidence: 0.8,
+                importance: score.value,
+                region: error.region,
+                payload: error.line,
+                sourceLanguage: nil,
+                context: error.context
+            ))
+        }
+
+        // Terms are explained outside Coding Mode only; in an IDE nearly every
+        // identifier looks like jargon.
+        let terms = AppContextClassifier.classify(context) == .coding ? [] : termExtractor.candidates(in: context.textRegions)
+        for term in terms {
             let features = PersonalizationFeatures(action: .explainTerm, language: nil, bundleIdentifier: context.bundleIdentifier)
             let score = adjuster.adjust(scorer.scoreTerm(term, context: context), features: features)
             result.append(RoutedAction(

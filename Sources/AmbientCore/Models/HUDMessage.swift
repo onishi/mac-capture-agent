@@ -9,6 +9,12 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
         case translation
         /// A technical term explained (title = term, original = expansion, detail = explanation).
         case explanation
+        /// An error on screen with likely causes (title = error kind, original = error line).
+        case errorAnalysis
+        /// What the code under the pointer does.
+        case codeSummary
+        /// Sensitive information visible while sharing the screen (no value shown).
+        case securityWarning
     }
 
     public let id: UUID
