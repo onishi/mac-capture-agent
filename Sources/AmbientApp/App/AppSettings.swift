@@ -127,8 +127,8 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
             privacyPolicy: PrivacyPolicy(excludedBundleIdentifiers: excludedBundleIdentifiers),
             briefingEnabled: briefingEnabled,
             memoryEnabled: memoryEnabled,
-            debugOverlay: debugOverlay,
-            reasoningEnabled: reasoningEnabled
+            reasoningEnabled: reasoningEnabled,
+            debugOverlay: debugOverlay
         )
     }
 }
