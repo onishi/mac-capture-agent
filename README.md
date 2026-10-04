@@ -4,7 +4,17 @@
 
 > 何を表示するかより、何を表示しないかを重視する。
 
-v0.1 は「画面を継続監視し、変化した部分だけを解析して、外国語の文章に反応し、翻訳を HUD に表示する」ところまでを実装しています。
+現在は v0.4 です。画面の変化した部分だけを解析し、外国語の文章を翻訳して HUD に表示します。あわせて、オンデバイス LLM による一行の補足（BRIEF）と、表示した情報の記憶・検索（Archive）を備えています。
+
+## ドキュメント
+
+| 文書 | 内容 |
+| --- | --- |
+| [docs/SPEC.md](docs/SPEC.md) | 製品仕様（要件 ID と実装状況） |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 技術構成・データ設計・プライバシー設計 |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 開発計画（マイルストーン・完了条件・判断事項・実機チェックリスト） |
+| [docs/IMPLEMENTATION_PROMPT.md](docs/IMPLEMENTATION_PROMPT.md) | Claude Code / Codex にそのまま渡せる開発プロンプト |
+| [CLAUDE.md](CLAUDE.md) | 開発ルール |
 
 ```
 ScreenCaptureKit ─▶ FrameBuffer ─▶ ChangeDetector ─▶ AnalysisScheduler ─▶ OCR (変化領域のみ)
@@ -180,12 +190,17 @@ Xcode プロジェクトは Xcode 16 の「同期フォルダ」を使ってい�
 
 ## 今後の予定
 
-- Visual Memory の対象拡大（HUD に出さなかったテキストや、ブラウザの URL もオプトインで記録）
-- Web Search（person / animal / plant / landmark / product / news / technical term）
-- Movie Mode（俳優、キャラクター、ロケ地、音楽）
-- Coding Mode（VS Code / Terminal のコード説明、エラー解析）— `AppContextClassifier` で検出済み
-- Foundation Models を使った表示判断そのもの（現在は Briefing の生成のみ）、`AIProvider` 経由の Cloud AI（オプトイン）
-- Battery 状態に応じた自動モード切替
+詳細は [docs/ROADMAP.md](docs/ROADMAP.md)。
+
+| # | リリース | テーマ |
+| --- | --- | --- |
+| M0 | v0.4.1 | 実機検証と安定化（最優先） |
+| M1 | v0.5 | SQLite 移行、HUD の More 操作、専門用語の解説、再登場通知、LLM ルーター |
+| M2 | v0.6 | Coding Mode（エラー解析・コード説明）、秘密情報検出、画面共有中の警告 |
+| M3 | v0.7 | マウス注目領域、自動ブックマーク、作業セッション、作業復元 |
+| M4 | v0.8 | Web 検索とクラウド AI（オプトイン）、動植物・ランドマーク識別 |
+| M5 | v0.9 | Movie / Anime / News モード |
+| — | v1.0 | 製品化（性能・オンボーディング・配布） |
 
 ## Privacy policy（概要）
 
