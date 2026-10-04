@@ -6,7 +6,7 @@ import FoundationModels
 /// Term explanations and second-stage routing with Apple's on-device
 /// Foundation Models (macOS 26+, Apple Intelligence). Only recognized text is
 /// passed to the local model; nothing leaves the Mac.
-final class AppleIntelligenceReasoner: TermExplaining, RouterJudging, DeveloperAssisting, @unchecked Sendable {
+final class AppleIntelligenceReasoner: TermExplaining, RouterJudging, DeveloperAssisting, SessionNaming, @unchecked Sendable {
     var isAvailable: Bool {
         #if canImport(FoundationModels)
         if #available(macOS 26.0, *) {
@@ -119,6 +119,31 @@ extension AppleIntelligenceReasoner {
                 options: GenerationOptions(temperature: 0.2, maximumResponseTokens: 180)
             )
             return CodeSummary(isCode: response.content.isCode, summary: response.content.summary)
+        }
+        #endif
+        throw BriefingError.unavailable
+    }
+}
+
+// MARK: - Work sessions
+
+extension AppleIntelligenceReasoner {
+    func nameSession(titles: [String], applications: [String], targetLanguage: String) async throws -> String {
+        #if canImport(FoundationModels)
+        if #available(macOS 26.0, *) {
+            guard SystemLanguageModel.default.isAvailable else { throw BriefingError.unavailable }
+            let session = LanguageModelSession(instructions: """
+                Name the work session described by these window titles, like a project or task name \
+                (e.g. "Cinema timetable feature development"). At most 6 words. No quotes. \
+                Answer in the language with code "\(targetLanguage)".
+                """)
+            let prompt = """
+                Apps: \(applications.joined(separator: ", "))
+                Window titles:
+                \(titles.map { "- " + String($0.prefix(120)) }.joined(separator: "\n"))
+                """
+            let response = try await session.respond(to: prompt, options: GenerationOptions(temperature: 0.3, maximumResponseTokens: 30))
+            return response.content
         }
         #endif
         throw BriefingError.unavailable

@@ -33,6 +33,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.openArchive = { [weak archiveWindow] query in
             archiveWindow?.show(query: query)
         }
+        controller.openSessions = { [weak archiveWindow] in
+            archiveWindow?.show(tab: .sessions)
+        }
         menuBar = MenuBarController(
             controller: controller,
             openSettings: { [weak settingsWindow] in settingsWindow?.show() },

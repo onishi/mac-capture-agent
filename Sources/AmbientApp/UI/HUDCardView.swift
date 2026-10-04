@@ -71,7 +71,14 @@ struct HUDCardView: View {
 
     private var actionBar: some View {
         HStack(spacing: 6) {
-            if message.kind != .securityWarning {
+            switch message.kind {
+            case .securityWarning:
+                EmptyView()
+            case .qrCode:
+                actionButton("COPY", .copy)
+            case .resume:
+                actionButton("SESSIONS", .openArchive)
+            case .translation, .explanation, .errorAnalysis, .codeSummary:
                 actionButton("COPY", .copy)
                 actionButton("ARCHIVE", .openArchive)
                 actionButton("NOT USEFUL", .notUseful)
@@ -83,7 +90,7 @@ struct HUDCardView: View {
                 if let language = message.sourceLanguage {
                     actionButton("MUTE \(LanguageCode.base(language).uppercased())", .skipLanguage)
                 }
-            case .errorAnalysis, .codeSummary, .securityWarning:
+            case .errorAnalysis, .codeSummary, .securityWarning, .qrCode, .resume:
                 EmptyView()
             }
             Spacer(minLength: 0)
@@ -121,6 +128,8 @@ struct HUDCardView: View {
         case .errorAnalysis: return "ALERT // FAULT ANALYSIS"
         case .codeSummary: return "INTEL // CODE ANALYSIS"
         case .securityWarning: return "⚠ WARNING // EXPOSURE RISK"
+        case .qrCode: return "SCAN // QR PAYLOAD"
+        case .resume: return "RESUME // LAST OPERATION"
         }
     }
 
@@ -131,6 +140,8 @@ struct HUDCardView: View {
         case .errorAnalysis: return "FAULT"
         case .codeSummary: return "CODE"
         case .securityWarning: return "SHARING"
+        case .qrCode: return "QR"
+        case .resume: return "RESUME"
         }
     }
 
@@ -138,7 +149,8 @@ struct HUDCardView: View {
     private var tint: Color {
         switch message.kind {
         case .errorAnalysis, .securityWarning: return SpyTheme.alert
-        case .translation, .explanation, .codeSummary: return SpyTheme.accent
+        case .resume: return SpyTheme.intel
+        case .translation, .explanation, .codeSummary, .qrCode: return SpyTheme.accent
         }
     }
 

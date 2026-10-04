@@ -146,6 +146,11 @@ public enum DailySummary {
     public struct Theme: Sendable, Equatable {
         public let name: String
         public let minutes: Int
+
+        public init(name: String, minutes: Int) {
+            self.name = name
+            self.minutes = minutes
+        }
     }
 
     public static func themes(_ sessions: [(name: String, activeDuration: TimeInterval)], minimumMinutes: Int = 3) -> [Theme] {
@@ -181,5 +186,22 @@ public enum QRContent {
             return (true, URLSanitizer.displayHost(url) + path)
         }
         return (false, String(trimmed.prefix(80)))
+    }
+}
+
+/// Names a work session from its page titles (Foundation Models in the app).
+public protocol SessionNaming: Sendable {
+    var isAvailable: Bool { get }
+    func nameSession(titles: [String], applications: [String], targetLanguage: String) async throws -> String
+}
+
+public enum SessionNameSanitizer {
+    public static let maximumLength = 40
+
+    public static func sanitize(_ raw: String) -> String? {
+        let line = raw.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+        let cleaned = TextHeuristics.normalized(line).trimmingCharacters(in: CharacterSet(charactersIn: "\"'“”「」*`.。 "))
+        guard !cleaned.isEmpty else { return nil }
+        return cleaned.count > maximumLength ? String(cleaned.prefix(maximumLength - 1)) + "…" : cleaned
     }
 }

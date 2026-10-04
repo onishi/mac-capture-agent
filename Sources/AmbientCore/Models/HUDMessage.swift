@@ -15,6 +15,10 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
         case codeSummary
         /// Sensitive information visible while sharing the screen (no value shown).
         case securityWarning
+        /// Where an on-screen QR code leads.
+        case qrCode
+        /// "Pick up where you left off" (title = session name).
+        case resume
     }
 
     public let id: UUID

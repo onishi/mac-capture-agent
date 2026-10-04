@@ -123,3 +123,11 @@ final class InterestRegionSchedulerTests: XCTestCase {
         XCTAssertEqual(result?.contains { $0.rect.intersects(interest.rect) }, true, "analyzed while still changing")
     }
 }
+
+final class SessionNameSanitizerTests: XCTestCase {
+    func testSanitize() {
+        XCTAssertEqual(SessionNameSanitizer.sanitize("「映画時刻表機能の開発」。\n補足"), "映画時刻表機能の開発")
+        XCTAssertNil(SessionNameSanitizer.sanitize("  "))
+        XCTAssertEqual(SessionNameSanitizer.sanitize(String(repeating: "a", count: 100))?.count, SessionNameSanitizer.maximumLength)
+    }
+}

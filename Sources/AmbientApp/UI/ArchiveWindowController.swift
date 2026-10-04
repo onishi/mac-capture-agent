@@ -18,8 +18,12 @@ final class ArchiveWindowController {
         }
     }
 
-    func show(query: String? = nil) {
-        if let query { model.query = query }
+    func show(query: String? = nil, tab: ArchiveTab? = nil) {
+        if let query {
+            model.query = query
+            model.tab = .records
+        }
+        if let tab { model.tab = tab }
         let window = self.window ?? makeWindow()
         self.window = window
         model.refresh()

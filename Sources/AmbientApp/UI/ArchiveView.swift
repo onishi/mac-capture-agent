@@ -16,9 +16,16 @@ struct ArchiveView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            queryField
+            tabBar
+            if model.tab == .records {
+                queryField
+            }
             Rectangle().fill(SpyTheme.accentDim).frame(height: 0.75)
-            results
+            switch model.tab {
+            case .records: results
+            case .sessions: sessionsList
+            case .today: todayView
+            }
             footer
         }
         .background(background)
@@ -47,6 +54,150 @@ struct ArchiveView: View {
         .padding(.horizontal, 18)
         .padding(.top, 30)   // room for the transparent title bar
         .padding(.bottom, 10)
+    }
+
+    private static let rangeFormatter: DateIntervalFormatter = {
+        let formatter = DateIntervalFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
+    private var tabBar: some View {
+        HStack(spacing: 6) {
+            ForEach(ArchiveTab.allCases, id: \.self) { tab in
+                Button {
+                    model.tab = tab
+                } label: {
+                    Text(tab.rawValue)
+                        .font(SpyTheme.mono(10, weight: .bold))
+                        .tracking(1.4)
+                        .foregroundStyle(model.tab == tab ? Color.black : SpyTheme.accent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(model.tab == tab ? SpyTheme.accent : Color.clear)
+                        .overlay(Rectangle().strokeBorder(SpyTheme.accentDim, lineWidth: 0.75))
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 18)
+        .padding(.bottom, 8)
+    }
+
+    @ViewBuilder
+    private var sessionsList: some View {
+        if model.sessions.isEmpty {
+            emptyState(title: "NO SESSIONS YET", detail: "Work sessions appear after a few minutes of activity (titles and URLs only).")
+        } else {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(model.sessions) { session in
+                        sessionRow(session)
+                    }
+                }
+            }
+        }
+    }
+
+    private func sessionRow(_ session: WorkSessionRecord) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(session.title ?? "Session")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(SpyTheme.textPrimary)
+                Spacer()
+                Text("\(Int((session.activeSeconds / 60).rounded())) MIN")
+                    .font(SpyTheme.mono(10, weight: .bold))
+                    .foregroundStyle(SpyTheme.accent)
+            }
+            Text("\(Self.rangeFormatter.string(from: session.start, to: session.end)) · \(session.applications.prefix(4).joined(separator: ", "))")
+                .font(SpyTheme.mono(9.5, weight: .semibold))
+                .foregroundStyle(SpyTheme.textSecondary)
+            ForEach(session.bookmarks) { bookmark in
+                Button {
+                    if let url = bookmark.url { model.openPage(url) }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("★").foregroundStyle(SpyTheme.intel)
+                        Text(bookmark.title ?? bookmark.url?.absoluteString ?? "—")
+                            .foregroundStyle(SpyTheme.textPrimary.opacity(0.9))
+                            .lineLimit(1)
+                        if let url = bookmark.url {
+                            Text(URLSanitizer.displayHost(url))
+                                .foregroundStyle(SpyTheme.textSecondary)
+                        }
+                    }
+                    .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .disabled(bookmark.url == nil)
+            }
+            ForEach(session.topPages.filter { page in !session.bookmarks.contains { $0.title == page } }.prefix(3), id: \.self) { page in
+                Text("· \(page)")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(SpyTheme.textSecondary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(SpyTheme.accent.opacity(0.08)).frame(height: 0.5)
+        }
+    }
+
+    @ViewBuilder
+    private var todayView: some View {
+        if model.themes.isEmpty {
+            emptyState(title: "NOTHING LOGGED TODAY", detail: "Today's themes appear once work sessions have been recorded.")
+        } else {
+            let maximum = Double(model.themes.map(\.minutes).max() ?? 1)
+            VStack(alignment: .leading, spacing: 12) {
+                Text("TODAY'S MAIN THEMES")
+                    .font(SpyTheme.mono(10, weight: .bold))
+                    .tracking(1.6)
+                    .foregroundStyle(SpyTheme.accent)
+                ForEach(model.themes, id: \.name) { theme in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(theme.name)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(SpyTheme.textPrimary)
+                            Spacer()
+                            Text("\(theme.minutes) MIN")
+                                .font(SpyTheme.mono(10, weight: .bold))
+                                .foregroundStyle(SpyTheme.accent)
+                        }
+                        GeometryReader { proxy in
+                            Rectangle()
+                                .fill(SpyTheme.accent.opacity(0.75))
+                                .frame(width: max(2, proxy.size.width * Double(theme.minutes) / maximum))
+                        }
+                        .frame(height: 6)
+                        .background(SpyTheme.accent.opacity(0.12))
+                    }
+                }
+                Spacer()
+            }
+            .padding(18)
+        }
+    }
+
+    private func emptyState(title: String, detail: String) -> some View {
+        VStack(spacing: 8) {
+            Spacer()
+            Text(title)
+                .font(SpyTheme.mono(13, weight: .bold))
+                .tracking(3)
+                .foregroundStyle(SpyTheme.accent.opacity(0.6))
+            Text(detail)
+                .font(.system(size: 12))
+                .foregroundStyle(SpyTheme.textSecondary)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var queryField: some View {

@@ -50,6 +50,11 @@ public struct BookmarkScore: Sendable, Equatable {
     public let value: Double
     public let reasons: [BookmarkReason]
 
+    public init(value: Double, reasons: [BookmarkReason]) {
+        self.value = min(max(value, 0), 1)
+        self.reasons = reasons
+    }
+
     public var isBookmark: Bool { value >= BookmarkScorer.threshold }
 }
 

@@ -65,13 +65,19 @@ struct SettingsView: View {
 
             Section("Visual memory") {
                 Toggle("Archive intel shown in the HUD", isOn: $settings.memoryEnabled)
+                Toggle("Remember pages you read (titles, URLs, reading time)", isOn: $settings.pageTrackingEnabled)
+                    .disabled(!settings.memoryEnabled)
+                Toggle("Read the URL of the front browser tab", isOn: $settings.readBrowserURLs)
+                    .disabled(!settings.memoryEnabled || !settings.pageTrackingEnabled)
+                Toggle("Offer to pick up where you left off", isOn: $settings.resumeEnabled)
+                    .disabled(!settings.memoryEnabled || !settings.pageTrackingEnabled)
                 Picker("Keep for", selection: $settings.memoryRetentionDays) {
                     ForEach(AppSettings.retentionChoices, id: \.self) { days in
                         Text(days == 1 ? "1 day" : "\(days) days").tag(days)
                     }
                 }
                 .disabled(!settings.memoryEnabled)
-                Text("Only the text shown in the HUD is archived (never screenshots), on this Mac only. Search it with ⌥⌘K.")
+                Text("Archived: text shown in the HUD, and — if enabled — titles, URLs (without query strings) and reading time of pages, for automatic bookmarks and work sessions. Never screenshots. On this Mac only; excluded apps are never recorded. Search with ⌥⌘K. macOS asks once per browser before URLs can be read.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let onPurgeMemory {

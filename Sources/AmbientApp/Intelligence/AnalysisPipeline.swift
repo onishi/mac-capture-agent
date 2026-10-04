@@ -65,6 +65,7 @@ actor AnalysisPipeline {
     private let store: IntelStore
     private let reasoner: (any PipelineReasoner)?
     private let screenShare: ScreenShareMonitor
+    private let page: PageContext
     private let displayID: CGDirectDisplayID
     private let sensitiveDetector = SensitiveDataDetector()
     private var warningCooldown = CooldownCache(duration: 60)
@@ -95,6 +96,7 @@ actor AnalysisPipeline {
         store: IntelStore,
         reasoner: (any PipelineReasoner)?,
         screenShare: ScreenShareMonitor,
+        page: PageContext,
         displayID: CGDirectDisplayID,
         present: @escaping Presenter
     ) {
@@ -119,6 +121,7 @@ actor AnalysisPipeline {
         self.store = store
         self.reasoner = configuration.reasoningEnabled ? reasoner : nil
         self.screenShare = screenShare
+        self.page = page
         self.displayID = displayID
     }
 
@@ -148,12 +151,16 @@ actor AnalysisPipeline {
             Log.privacy.info("Analysis resumed")
         }
 
-        // Interest Region: in Coding Mode, a pointer resting for 2 s asks for a code summary.
-        if activeReasoner != nil,
-           AppContextClassifier.classify(bundleIdentifier: app.bundleIdentifier) == .coding,
-           let pointer = pointerPosition(),
+        // Interest Region: a pointer resting for 2 s. In Coding Mode it asks for a
+        // code summary; elsewhere the region is analyzed first.
+        if let pointer = pointerPosition(),
            let dwell = dwellTracker.update(position: pointer, at: frame.timestamp) {
-            pendingDwellRegion = PointerDwellTracker.region(around: dwell)
+            let region = PointerDwellTracker.region(around: dwell)
+            if activeReasoner != nil, AppContextClassifier.classify(bundleIdentifier: app.bundleIdentifier) == .coding {
+                pendingDwellRegion = region
+            } else {
+                scheduler.prioritize(ChangedRegion(rect: region, confidence: 1), at: frame.timestamp)
+            }
         }
 
         guard let gray = FrameConverter.grayscale(from: frame.pixelBuffer) else {
@@ -221,6 +228,8 @@ actor AnalysisPipeline {
         diagnostics.textBlockCount = blocks.count
         Log.vision.debug("OCR finished: \(lines.count) line(s), \(blocks.count) block(s)")
 
+        let codes = await ocr.detectQRCodes(in: frame.pixelBuffer, regions: padded)
+
         // Secrets are never translated, explained or archived; while sharing they trigger a warning.
         let (safeBlocks, findings) = sensitiveDetector.partition(blocks)
         if !findings.isEmpty {
@@ -264,9 +273,12 @@ actor AnalysisPipeline {
         }
 
         var outcome: IntelOutcome?
+        if action.action == .ignore, let code = codes.first {
+            outcome = await showQRCode(code.payload, rect: code.rect, app: app, timestamp: frame.timestamp)
+        }
         switch action.action {
         case .ignore:
-            counters.ignored += 1
+            if outcome == nil { counters.ignored += 1 }
         case .translate:
             Log.pipeline.info("Routed action: translate importance \(action.importance, format: .fixed(precision: 2))")
             let translateStart = clock.now
@@ -464,6 +476,26 @@ actor AnalysisPipeline {
         return CGPoint(x: (location.x - bounds.minX) / bounds.width, y: (location.y - bounds.minY) / bounds.height)
     }
 
+    // MARK: QR codes
+
+    /// Shows where an on-screen QR code leads (people can't read QR codes on a screen).
+    private func showQRCode(_ payload: String, rect: CGRect, app: ForegroundContextProvider.Snapshot, timestamp: TimeInterval) async -> IntelOutcome {
+        guard let content = QRContent.display(payload), sensitiveDetector.kinds(in: payload).isEmpty else { return .discarded }
+        let key = CooldownCache.key(action: .ignore, payload: "qr " + payload)
+        guard cooldown.checkAndRecord(key, now: timestamp) else { return .cooldown }
+        let message = HUDMessage(
+            kind: .qrCode,
+            title: content.isURL ? "LINK" : "TEXT",
+            original: content.isURL ? "QR → URL" : "QR → TEXT",
+            detail: content.text,
+            anchor: rect,
+            targetLanguage: configuration.targetLanguage
+        )
+        await present(.show(message, briefingPending: false))
+        Log.pipeline.info("QR code shown")
+        return .shown
+    }
+
     // MARK: Sensitive data
 
     private func handleSensitive(_ findings: [SensitiveFinding], timestamp: TimeInterval) async {
@@ -560,11 +592,11 @@ actor AnalysisPipeline {
 
     private func rememberIfEnabled(_ message: HUDMessage, app: ForegroundContextProvider.Snapshot, windowTitle: String?, entities: [ExtractedEntity]) async {
         guard configuration.memoryEnabled else { return }
-        guard message.kind != .securityWarning else { return }
+        guard message.kind != .securityWarning, message.kind != .qrCode, message.kind != .resume else { return }
         let isExplanation = message.kind == .explanation
         let kind: VisualMemoryEntry.Kind
         switch message.kind {
-        case .translation, .securityWarning: kind = .translation
+        case .translation, .securityWarning, .qrCode, .resume: kind = .translation
         case .explanation: kind = .explanation
         case .errorAnalysis: kind = .errorAnalysis
         case .codeSummary: kind = .codeSummary
@@ -576,6 +608,7 @@ actor AnalysisPipeline {
             application: app.appName,
             bundleIdentifier: app.bundleIdentifier,
             windowTitle: windowTitle,
+            url: page.currentURL,
             sourceLanguage: message.sourceLanguage,
             targetLanguage: message.targetLanguage,
             original: isExplanation && message.original != message.title ? "\(message.title) — \(message.original)" : message.original,

@@ -5,5 +5,18 @@
 	<!-- Sandboxed. No network, file or device entitlements: screen content can not leave the Mac. -->
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
+	<!-- Read the front tab's URL from browsers (ROADMAP D-5). macOS asks the user per browser. -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+	<key>com.apple.security.temporary-exception.apple-events</key>
+	<array>
+		<string>com.apple.Safari</string>
+		<string>com.apple.SafariTechnologyPreview</string>
+		<string>com.google.Chrome</string>
+		<string>com.microsoft.edgemac</string>
+		<string>com.brave.Browser</string>
+		<string>company.thebrowser.Browser</string>
+		<string>com.vivaldi.Vivaldi</string>
+	</array>
 </dict>
 </plist>

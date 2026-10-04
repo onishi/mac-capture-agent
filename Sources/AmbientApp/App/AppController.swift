@@ -26,6 +26,11 @@ final class AppController: ObservableObject {
     private let screenShare = ScreenShareMonitor()
     /// Opens the archive with a query (set by the app delegate).
     var openArchive: ((String) -> Void)?
+    /// Opens the archive's sessions tab.
+    var openSessions: (() -> Void)?
+    private let tracker: ActivityTracker
+    private var wakeObserver: NSObjectProtocol?
+    private static let lastResumeOfferKey = "lastResumeOffer"
     private let translationBridge = TranslationBridge()
     private let translationHost: TranslationHostWindow
     private let foreground = ForegroundContextProvider()
@@ -59,6 +64,7 @@ final class AppController: ObservableObject {
             userLanguage: settings.targetLanguage,
             embedding: NLTextEmbedding()
         )
+        tracker = ActivityTracker(store: memoryStore, foreground: foreground, namer: reasoner)
         if let legacy = directory?.appendingPathComponent("visual-memory.json") {
             let store = memoryStore
             Task { await store.importLegacyJSON(at: legacy) }
@@ -68,6 +74,14 @@ final class AppController: ObservableObject {
         }
         screenShare.setPretend(settings.pretendScreenSharing)
         screenShare.start()
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(5))
+                await self?.offerResumeIfNeeded()
+            }
+        }
         overlay.onAction = { [weak self] action, message in
             self?.handleHUDAction(action, for: message)
         }
@@ -122,7 +136,9 @@ final class AppController: ObservableObject {
                 await pipeline.run(frames: frames)
             }
             status = .running
+            tracker.start(trackerConfiguration)
             startFollowingDisplayIfNeeded()
+            Task { await offerResumeIfNeeded() }
         } catch ScreenCaptureError.permissionDenied {
             status = .needsPermission
         } catch {
@@ -172,6 +188,48 @@ final class AppController: ObservableObject {
         pipelineTask?.cancel()
         pipelineTask = nil
         await capture.stop()
+    }
+
+    // MARK: Resume
+
+    private var trackerConfiguration: ActivityTracker.Configuration {
+        ActivityTracker.Configuration(
+            enabled: settings.memoryEnabled && settings.pageTrackingEnabled,
+            readBrowserURLs: settings.readBrowserURLs,
+            privacyPolicy: PrivacyPolicy(excludedBundleIdentifiers: settings.excludedBundleIdentifiers),
+            targetLanguage: settings.targetLanguage
+        )
+    }
+
+    /// "Pick up where you left off": once a day, after a break of 4+ hours.
+    func offerResumeIfNeeded() async {
+        guard settings.resumeEnabled, settings.memoryEnabled, status == .running else { return }
+        let now = Date()
+        let defaults = UserDefaults.standard
+        let lastOffer = defaults.object(forKey: Self.lastResumeOfferKey) as? Date
+        let offeredToday = lastOffer.map { Calendar.current.isDateInToday($0) } ?? false
+        guard let session = await memoryStore.lastSession(endingBefore: now) else { return }
+        guard ResumePolicy.shouldOffer(lastSessionEnd: session.end, now: now, alreadyOfferedToday: offeredToday) else { return }
+        defaults.set(now, forKey: Self.lastResumeOfferKey)
+
+        let formatter = DateFormatter()
+        formatter.doesRelativeDateFormatting = true
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        let minutes = Int((session.activeSeconds / 60).rounded())
+        let items = (session.bookmarks.compactMap(\.title) + session.topPages)
+        var unique: [String] = []
+        for item in items where !unique.contains(item) { unique.append(item) }
+        let message = HUDMessage(
+            kind: .resume,
+            title: session.title ?? "Session",
+            original: "\(formatter.string(from: session.end)) · \(minutes) min · \(session.applications.prefix(3).joined(separator: ", "))",
+            detail: unique.prefix(3).map { "・" + String($0.prefix(60)) }.joined(separator: "\n"),
+            anchor: nil,
+            targetLanguage: settings.targetLanguage
+        )
+        overlay.show(message, on: NSScreen.main, position: .topRight, briefingPending: false)
+        Log.app.info("Resume offered")
     }
 
     // MARK: Demo
@@ -225,8 +283,12 @@ final class AppController: ObservableObject {
             // Taking the information away is the strongest signal of interest.
             recordFeedback(.searched, for: message)
         case .openArchive:
-            recordFeedback(.searched, for: message)
-            openArchive?(message.detail)
+            if message.kind == .resume {
+                openSessions?()
+            } else {
+                recordFeedback(.searched, for: message)
+                openArchive?(message.detail)
+            }
         case .notUseful:
             lastMessage = message
             markLastMessageNotUseful()
@@ -296,6 +358,7 @@ final class AppController: ObservableObject {
         runningDisplayID = nil
         debugOverlay.hide()
         redactionOverlay.clear()
+        tracker.stop()
         displayFollowTask?.cancel()
         displayFollowTask = nil
         let capture = self.capture
@@ -309,6 +372,7 @@ final class AppController: ObservableObject {
         let language = settings.targetLanguage
         Task { await store.configure(retentionDays: retention, userLanguage: language) }
         guard status == .running else { return }
+        tracker.start(trackerConfiguration)
         if settings.pipelineConfiguration != runningConfiguration {
             Log.app.info("Settings changed, restarting pipeline")
             restart()
@@ -361,12 +425,14 @@ final class AppController: ObservableObject {
             store: memoryStore,
             reasoner: reasoner,
             screenShare: screenShare,
+            page: tracker.page,
             displayID: displayID,
             present: { event in
                 await MainActor.run { [weak self] in
                     switch event {
                     case .show(let message, let briefingPending):
                         self?.lastMessage = message
+                        self?.tracker.noteIntelShown()
                         overlay.show(
                             message,
                             on: NSScreen.screen(for: displayID),

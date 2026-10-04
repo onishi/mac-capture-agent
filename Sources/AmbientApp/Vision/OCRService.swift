@@ -23,6 +23,33 @@ final class OCRService: @unchecked Sendable {
         }
     }
 
+    /// QR codes in the regions: payload and normalized top-left rect.
+    func detectQRCodes(in pixelBuffer: CVPixelBuffer, regions: [ChangedRegion]) async -> [(payload: String, rect: CGRect)] {
+        let pixelBox = PixelBufferBox(buffer: pixelBuffer)
+        return await withCheckedContinuation { continuation in
+            queue.async {
+                var codes: [(payload: String, rect: CGRect)] = []
+                for region in regions where region.area >= self.minimumRegionArea {
+                    let roi = FrameConverter.visionRect(fromTopLeft: region.rect)
+                    let request = VNDetectBarcodesRequest()
+                    request.symbologies = [.qr]
+                    request.regionOfInterest = roi
+                    let handler = VNImageRequestHandler(cvPixelBuffer: pixelBox.buffer, options: [:])
+                    do {
+                        try handler.perform([request])
+                    } catch {
+                        continue
+                    }
+                    for observation in request.results ?? [] {
+                        guard let payload = observation.payloadStringValue else { continue }
+                        codes.append((payload, FrameConverter.topLeftRect(fromVisionBox: observation.boundingBox, regionOfInterest: roi)))
+                    }
+                }
+                continuation.resume(returning: codes)
+            }
+        }
+    }
+
     private func recognize(in pixelBuffer: CVPixelBuffer, region: ChangedRegion) -> [RecognizedTextRegion] {
         let roi = FrameConverter.visionRect(fromTopLeft: region.rect)
         let request = VNRecognizeTextRequest()

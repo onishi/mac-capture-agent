@@ -1,4 +1,4 @@
-# Ambient Screen Intelligence (v0.6)
+# Ambient Screen Intelligence (v0.7)
 
 ユーザーが見ている画面を AI も一緒に見て、**本当に価値があるときだけ**静かに補足情報を出す macOS メニューバーアプリです。
 
@@ -107,6 +107,7 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 | Entitlement | 理由 |
 | --- | --- |
 | `com.apple.security.app-sandbox` | サンドボックス化。ネットワーク・ファイルアクセスの Entitlement は **付与していません** |
+| `com.apple.security.automation.apple-events`（＋対象ブラウザの temporary exception） | 前面タブの URL を読むため（v0.7）。macOS がブラウザごとに初回だけ許可を求め、設定でオフにできる |
 | Hardened Runtime | 有効 |
 
 画面収録は TCC（ユーザー許可）で管理されるため、追加の Entitlement は不要です。
@@ -125,6 +126,14 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **AI Router（ignore-first）**: ルールベースの `InterestScorer` で 0.0〜1.0 のスコアを付け、0.7 以上のものだけ表示。メニューバー領域の文字やコーディングアプリでは減点
 - **Cooldown**: 同じ内容は 5 分間再表示しない（OCR の揺れを吸収する正規化キー）
 - **HUD**: 透明・最前面・クリック透過の `NSPanel` + SwiftUI。fade in 300ms → 3〜6 秒表示 → fade out 400ms。画面右上に表示
+- **作業コンテキスト（v0.7）**: 前面のページ（ブラウザは URL、ほかはアプリ＋ウィンドウタイトル）と閲覧時間を記録
+  - **自動ブックマーク**: 閲覧時間・再訪・コピー・ポインタ滞在・HUD 表示から重要度を推定し、高いページを ★ で保存（保持期間を過ぎても残る）
+  - **作業セッション**: Slack → Chrome → GitHub → VS Code → Terminal のような一連の作業を 1 つにまとめ、Apple Intelligence が名前を付ける（無ければキーワード）
+  - **作業復元**: 起動時やスリープ復帰時、4 時間以上空いていたら 1 日 1 回「前回の続き」（ブックマークと主なページ）を表示
+  - **TODAY**: Archive の TODAY タブに今日の主なテーマと時間、SESSIONS タブにセッション一覧
+  - **ブラウザの URL**: Safari と Chromium 系（Chrome / Edge / Brave / Arc / Vivaldi）から Apple Events で取得。クエリ・フラグメント・認証情報は保存しない。macOS がブラウザごとに許可を求める
+- **注目領域（v0.7）**: ポインタを 2 秒止めた領域を、画面が落ち着くのを待たずに優先して解析
+- **QR コード（v0.7）**: 画面上の QR コードの行き先（ホスト＋パス）を `SCAN // QR PAYLOAD` で表示
 - **Coding Mode（v0.6）**: VS Code・Xcode・ターミナル、またはブラウザで GitHub / GitLab / Stack Overflow を開いているときに切り替わる
   - **エラー解析**: Python / JavaScript / Swift / Rust / Go / Java / npm / git / シェルの代表的なエラーを検出し、Apple Intelligence が原因候補と次の一手を `ALERT // FAULT ANALYSIS` に表示。`0 errors`・警告・ビルド成功などの正常ログには反応しない
   - **コード説明**: ポインタを 2 秒止めた周辺のコードを読み取り、何をしているかを 1〜3 ステップで要約（`INTEL // CODE ANALYSIS`）
@@ -155,7 +164,7 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **Pause / Resume**: 5 分・30 分・無期限。停止中はキャプチャ自体を止める
 - **Privacy**: 除外アプリ（1Password などのパスワードマネージャー、メッセージ、写真）とパスワード系ウィンドウタイトルでは解析しない
 - **Performance Mode**: Battery / Balanced / Performance（キャプチャ 5/15/30fps、Vision 0.5/1/2fps）
-- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization、DecodeEffect、Briefing、VisualMemory、PauseSchedule、Diagnostics、TermExtractor、IntelStore、ErrorDetector、SensitiveDataDetector など 133 件（うちストア 11 件は macOS のみ）
+- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization、DecodeEffect、Briefing、VisualMemory、PauseSchedule、Diagnostics、TermExtractor、IntelStore、ErrorDetector、SensitiveDataDetector、WorkSessionClusterer、BookmarkScorer など 149 件（うちストア 14 件は macOS のみ）
 
 ## プロジェクト構成
 

@@ -279,7 +279,7 @@ CREATE VIRTUAL TABLE intel_fts USING fts5(title, body, briefing, content='intel'
 | --- | --- | --- | --- |
 | 現在 | 画面収録（TCC）、App Sandbox、Hardened Runtime | 画面取得 | 初回起動時 |
 | v0.7 | なし（ポインタ位置・クリップボードの変化回数は権限不要） | Interest Region、自動ブックマーク | — |
-| v0.7（任意） | Apple Events（ブラウザの URL 取得） | VM-1 の URL | 機能を有効にしたときだけ |
+| v0.7 | Apple Events（`com.apple.security.automation.apple-events` と対象ブラウザの temporary exception、`NSAppleEventsUsageDescription`） | ブラウザの URL（D-5 決定） | macOS がブラウザごとに初回だけ確認。設定でオフ可 |
 | v0.8 | `com.apple.security.network.client` | クラウド AI・Web 検索 | 設定でオプトインするまで通信しない。README のプライバシー表記を更新 |
 | v1.0 以降 | マイク、音声認識 | Audio Intelligence | 機能単位でオプトイン |
 

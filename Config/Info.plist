@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Ambient Screen Intelligence reads the address of the page in front so that bookmarks and work sessions can link back to it. Only the address (without query strings) is stored, on this Mac.</string>
 	<key>NSScreenCaptureUsageDescription</key>
 	<string>Ambient Screen Intelligence looks at your screen to translate foreign-language text. Everything is processed on this Mac and nothing is saved.</string>
 </dict>

@@ -22,6 +22,9 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         static let warnSensitive = "warnSensitiveWhileSharing"
         static let redact = "redactWhileSharing"
         static let pretendSharing = "pretendScreenSharing"
+        static let pageTracking = "pageTrackingEnabled"
+        static let browserURLs = "readBrowserURLs"
+        static let resume = "resumeEnabled"
     }
 
     static let supportedTargetLanguages = ["ja", "en", "zh-Hans", "zh-Hant", "ko", "fr", "de", "es", "it", "pt"]
@@ -86,6 +89,18 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
     @Published var pretendScreenSharing: Bool {
         didSet { defaults.set(pretendScreenSharing, forKey: Key.pretendSharing) }
     }
+    /// Record page titles / URLs and reading time for bookmarks and work sessions.
+    @Published var pageTrackingEnabled: Bool {
+        didSet { defaults.set(pageTrackingEnabled, forKey: Key.pageTracking) }
+    }
+    /// Read the front tab's URL from browsers (Apple Events; asks permission per browser).
+    @Published var readBrowserURLs: Bool {
+        didSet { defaults.set(readBrowserURLs, forKey: Key.browserURLs) }
+    }
+    /// Offer "pick up where you left off" after a break.
+    @Published var resumeEnabled: Bool {
+        didSet { defaults.set(resumeEnabled, forKey: Key.resume) }
+    }
     /// Developer overlay: regions, router scores and timings (never text).
     @Published var debugOverlay: Bool {
         didSet { defaults.set(debugOverlay, forKey: Key.debugOverlay) }
@@ -113,6 +128,9 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         warnSensitiveWhileSharing = defaults.object(forKey: Key.warnSensitive) as? Bool ?? true
         redactWhileSharing = defaults.bool(forKey: Key.redact)
         pretendScreenSharing = defaults.bool(forKey: Key.pretendSharing)
+        pageTrackingEnabled = defaults.object(forKey: Key.pageTracking) as? Bool ?? true
+        readBrowserURLs = defaults.object(forKey: Key.browserURLs) as? Bool ?? true
+        resumeEnabled = defaults.object(forKey: Key.resume) as? Bool ?? true
     }
 
     // MARK: Personalization (aggregated weights only, never screen content)

@@ -1,8 +1,19 @@
 import AppKit
 import Combine
 
+enum ArchiveTab: String, CaseIterable {
+    case records = "RECORDS"
+    case sessions = "SESSIONS"
+    case today = "TODAY"
+}
+
 @MainActor
 final class ArchiveViewModel: ObservableObject {
+    @Published var tab: ArchiveTab = .records {
+        didSet { if tab != .records { refreshSessions() } }
+    }
+    @Published private(set) var sessions: [WorkSessionRecord] = []
+    @Published private(set) var themes: [DailySummary.Theme] = []
     @Published var query = ""
     @Published private(set) var results: [MemorySearchResult] = []
     @Published private(set) var totalRecords = 0
@@ -11,13 +22,13 @@ final class ArchiveViewModel: ObservableObject {
 
     let retentionDays: () -> Int
     let memoryEnabled: () -> Bool
-    private let store: any VisualMemoryStore
+    private let store: IntelStore
     private let onOpen: (VisualMemoryEntry) -> Void
     private var queryObservation: AnyCancellable?
     private var searchTask: Task<Void, Never>?
 
     init(
-        store: any VisualMemoryStore,
+        store: IntelStore,
         retentionDays: @escaping () -> Int,
         memoryEnabled: @escaping () -> Bool,
         onOpen: @escaping (VisualMemoryEntry) -> Void
@@ -57,6 +68,23 @@ final class ArchiveViewModel: ObservableObject {
             try? await Task.sleep(for: .seconds(1.2))
             if self?.copiedID == entry.id { self?.copiedID = nil }
         }
+    }
+
+    func refreshSessions() {
+        let store = self.store
+        Task { [weak self] in
+            let now = Date()
+            let week = await store.sessions(since: now.addingTimeInterval(-7 * 24 * 3600))
+            let today = week.filter { $0.end >= Calendar.current.startOfDay(for: now) }
+            let themes = DailySummary.themes(today.map { (name: $0.title ?? "Session", activeDuration: $0.activeSeconds) })
+            guard let self else { return }
+            self.sessions = week
+            self.themes = themes
+        }
+    }
+
+    func openPage(_ url: URL) {
+        NSWorkspace.shared.open(url)
     }
 
     func purge() {
