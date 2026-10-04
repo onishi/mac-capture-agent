@@ -138,7 +138,6 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
     func saveGeminiKey(_ key: String) {
         KeychainStore.saveAPIKey(key)
         hasGeminiKey = KeychainStore.readAPIKey() != nil
-        onboardingCompleted = defaults.bool(forKey: Key.onboardingCompleted)
     }
 
     func removeGeminiKey() {
@@ -193,6 +192,7 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         newsModeEnabled = defaults.object(forKey: Key.newsMode) as? Bool ?? true
         spoilerLevel = (defaults.object(forKey: Key.spoiler) as? Int).flatMap(SpoilerLevel.init(rawValue:)) ?? .uptoCurrent
         hasGeminiKey = KeychainStore.readAPIKey() != nil
+        onboardingCompleted = defaults.bool(forKey: Key.onboardingCompleted)
     }
 
     // MARK: Personalization (aggregated weights only, never screen content)
