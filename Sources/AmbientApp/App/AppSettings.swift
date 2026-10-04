@@ -28,6 +28,9 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         static let cloud = "cloudEnabled"
         static let geminiModel = "geminiModel"
         static let publicFigures = "publicFigureEnabled"
+        static let mediaMode = "mediaModeEnabled"
+        static let newsMode = "newsModeEnabled"
+        static let spoiler = "spoilerLevel"
     }
 
     static let supportedTargetLanguages = ["ja", "en", "zh-Hans", "zh-Hant", "ko", "fr", "de", "es", "it", "pt"]
@@ -115,6 +118,17 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
     @Published var publicFigureEnabled: Bool {
         didSet { defaults.set(publicFigureEnabled, forKey: Key.publicFigures) }
     }
+    /// Movie / Anime mode: work card and cast on screen.
+    @Published var mediaModeEnabled: Bool {
+        didSet { defaults.set(mediaModeEnabled, forKey: Key.mediaMode) }
+    }
+    /// News mode: background of the story being read.
+    @Published var newsModeEnabled: Bool {
+        didSet { defaults.set(newsModeEnabled, forKey: Key.newsMode) }
+    }
+    @Published var spoilerLevel: SpoilerLevel {
+        didSet { defaults.set(spoilerLevel.rawValue, forKey: Key.spoiler) }
+    }
     /// Whether a Gemini API key is stored in the Keychain (the key itself is never kept here).
     @Published private(set) var hasGeminiKey: Bool
     /// What was sent to the cloud this session (purpose, host, size — never content).
@@ -168,6 +182,9 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         cloudEnabled = defaults.bool(forKey: Key.cloud)
         geminiModel = defaults.string(forKey: Key.geminiModel) ?? GeminiAPI.defaultModel
         publicFigureEnabled = defaults.object(forKey: Key.publicFigures) as? Bool ?? true
+        mediaModeEnabled = defaults.object(forKey: Key.mediaMode) as? Bool ?? true
+        newsModeEnabled = defaults.object(forKey: Key.newsMode) as? Bool ?? true
+        spoilerLevel = (defaults.object(forKey: Key.spoiler) as? Int).flatMap(SpoilerLevel.init(rawValue:)) ?? .uptoCurrent
         hasGeminiKey = KeychainStore.readAPIKey() != nil
     }
 

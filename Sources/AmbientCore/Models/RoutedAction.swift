@@ -13,6 +13,7 @@ public enum SuggestedAction: String, Sendable, Equatable, Codable {
     case identifyPlant
     case identifyLandmark
     case identifyPerson
+    case identifyProduct
     case ignore
 }
 

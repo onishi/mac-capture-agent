@@ -70,6 +70,8 @@ actor AnalysisPipeline {
     private let reasoner: (any PipelineReasoner)?
     private let screenShare: ScreenShareMonitor
     private let page: PageContext
+    private let media: MediaContext
+    private var castCooldown = CooldownCache(duration: 10 * 60)
     private let cloud: (any CloudIdentifying)?
     private let faceDetector = FaceDetector()
     private var cloudLimiter = RateLimiter(minimumInterval: 30)
@@ -105,6 +107,7 @@ actor AnalysisPipeline {
         reasoner: (any PipelineReasoner)?,
         screenShare: ScreenShareMonitor,
         page: PageContext,
+        media: MediaContext,
         cloud: (any CloudIdentifying)?,
         displayID: CGDirectDisplayID,
         present: @escaping Presenter
@@ -131,6 +134,7 @@ actor AnalysisPipeline {
         self.reasoner = configuration.reasoningEnabled ? reasoner : nil
         self.screenShare = screenShare
         self.page = page
+        self.media = media
         self.cloud = configuration.cloudEnabled ? cloud : nil
         self.displayID = displayID
     }
@@ -277,7 +281,7 @@ actor AnalysisPipeline {
                     diagnostics.timings["llm"] = Self.milliseconds(clock.now - llmStart)
                     if show { action = RouterEscalation.apply(show: true, to: candidate) }
                 }
-            case .explainError, .explainCode, .identifyAnimal, .identifyPlant, .identifyLandmark, .identifyPerson, .ignore:
+            case .explainError, .explainCode, .identifyAnimal, .identifyPlant, .identifyLandmark, .identifyPerson, .identifyProduct, .ignore:
                 break
             }
         }
@@ -285,6 +289,9 @@ actor AnalysisPipeline {
         var outcome: IntelOutcome?
         if action.action == .ignore, let code = codes.first {
             outcome = await showQRCode(code.payload, rect: code.rect, app: app, timestamp: frame.timestamp)
+        }
+        if action.action == .ignore, outcome == nil {
+            outcome = await showCastIfNamed(safeBlocks, app: app, windowTitle: windowTitle, timestamp: frame.timestamp)
         }
         if action.action == .ignore, outcome == nil, let cloud, cloud.isAvailable {
             let cloudStart = clock.now
@@ -314,7 +321,7 @@ actor AnalysisPipeline {
             diagnostics.timings["explain"] = Self.milliseconds(clock.now - explainStart)
         case .explainCode:
             break   // triggered by pointer dwell, not by the router
-        case .identifyAnimal, .identifyPlant, .identifyLandmark, .identifyPerson:
+        case .identifyAnimal, .identifyPlant, .identifyLandmark, .identifyPerson, .identifyProduct:
             // Not implemented yet (the router keeps them below the show threshold).
             break
         }
@@ -508,7 +515,7 @@ actor AnalysisPipeline {
     ) async -> IntelOutcome? {
         let context = blocks.map(\.text).joined(separator: " ")
 
-        if let hint = categories.first(where: { [.animal, .plant, .landmark].contains($0) }),
+        if let hint = categories.first(where: { [.animal, .plant, .landmark, .food, .product].contains($0) }),
            let largest = regions.max(by: { $0.area < $1.area }),
            Double(largest.area) >= IdentificationPolicy.minimumRegionArea {
             // Never send a region that contains sensitive text.
@@ -520,8 +527,14 @@ actor AnalysisPipeline {
                 guard IdentificationPolicy.accept(answer, hint: hint) else { return .discarded }
                 let key = CooldownCache.key(action: .ignore, payload: "id " + answer.name)
                 guard cooldown.checkAndRecord(key, now: frame.timestamp) else { return .cooldown }
-                let entityType: EntityType = answer.category == "landmark" ? .landmark : .species
-                let action: SuggestedAction = answer.category == "landmark" ? .identifyLandmark : (answer.category == "plant" ? .identifyPlant : .identifyAnimal)
+                let entityType: EntityType
+                let action: SuggestedAction
+                switch answer.category {
+                case "landmark": (entityType, action) = (.landmark, .identifyLandmark)
+                case "plant": (entityType, action) = (.species, .identifyPlant)
+                case "food", "product": (entityType, action) = (.product, .identifyProduct)
+                default: (entityType, action) = (.species, .identifyAnimal)
+                }
                 var message = HUDMessage(
                     kind: .identification,
                     title: IdentificationPolicy.displayName(answer.name, confidence: answer.confidence, language: configuration.targetLanguage),
@@ -594,6 +607,34 @@ actor AnalysisPipeline {
         await rememberIfEnabled(message, app: app, windowTitle: windowTitle, entities: [person])
         Log.pipeline.info("Public figure shown")
         return .shown
+    }
+
+    // MARK: Movie / Anime mode
+
+    /// A character or performer of the current work named in subtitles / credits.
+    /// Uses the cast already fetched for the work card (no extra network).
+    private func showCastIfNamed(_ blocks: [RecognizedTextRegion], app: ForegroundContextProvider.Snapshot,
+                                 windowTitle: String?, timestamp: TimeInterval) async -> IntelOutcome? {
+        let current = media.current
+        guard !current.cast.isEmpty,
+              AppContextClassifier.classify(bundleIdentifier: app.bundleIdentifier, windowTitle: windowTitle) == .media else { return nil }
+        for block in blocks {
+            for member in CastMatcher.matches(current.cast, in: block.text) {
+                guard castCooldown.checkAndRecord(EntityName.canonical(member.character), now: timestamp) else { continue }
+                let japanese = LanguageCode.base(configuration.targetLanguage) == "ja"
+                let message = HUDMessage(
+                    kind: .cast,
+                    title: member.character,
+                    original: current.title ?? "",
+                    detail: (japanese ? "演: " : "Played by ") + member.performer,
+                    anchor: block.boundingBox,
+                    targetLanguage: configuration.targetLanguage
+                )
+                await present(.show(message, briefingPending: false))
+                return .shown
+            }
+        }
+        return nil
     }
 
     // MARK: QR codes
@@ -712,11 +753,11 @@ actor AnalysisPipeline {
 
     private func rememberIfEnabled(_ message: HUDMessage, app: ForegroundContextProvider.Snapshot, windowTitle: String?, entities: [ExtractedEntity]) async {
         guard configuration.memoryEnabled else { return }
-        guard message.kind != .securityWarning, message.kind != .qrCode, message.kind != .resume else { return }
+        guard ![.securityWarning, .qrCode, .resume, .mediaInfo, .cast, .newsContext].contains(message.kind) else { return }
         let isExplanation = message.kind == .explanation
         let kind: VisualMemoryEntry.Kind
         switch message.kind {
-        case .translation, .securityWarning, .qrCode, .resume: kind = .translation
+        case .translation, .securityWarning, .qrCode, .resume, .mediaInfo, .cast, .newsContext: kind = .translation
         case .explanation: kind = .explanation
         case .errorAnalysis: kind = .errorAnalysis
         case .codeSummary: kind = .codeSummary

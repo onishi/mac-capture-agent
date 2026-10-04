@@ -76,7 +76,7 @@ public struct InterestScorer: Sendable {
         switch category {
         case .animal, .plant, .landmark: return InterestScore(0.35)
         case .person: return InterestScore(0.05)
-        case .food, .text, .unknown: return InterestScore(0)
+        case .food, .product, .text, .unknown: return InterestScore(0)
         }
     }
 }

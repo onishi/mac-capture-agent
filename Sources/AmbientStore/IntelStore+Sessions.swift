@@ -77,6 +77,22 @@ extension IntelStore {
         } ?? []
     }
 
+    /// Earlier pages whose titles share any of the keywords (local "related reading").
+    func relatedPages(keywords: [String], excludingURL url: URL?, since date: Date, limit: Int = 3) -> [PageVisit] {
+        let words = keywords.filter { $0.count >= 3 }.prefix(3)
+        guard !words.isEmpty else { return [] }
+        return read("relatedPages") { db in
+            let conditions = words.map { _ in "lower(window_title) LIKE ?" }.joined(separator: " OR ")
+            var arguments: [DatabaseValueConvertible?] = words.map { "%" + $0.lowercased() + "%" }
+            arguments += [date.timeIntervalSince1970, url?.absoluteString ?? ""]
+            return try Row.fetchAll(db, sql: """
+                SELECT id, timestamp, duration, application, bundle_id, window_title, url, page_key FROM observation
+                WHERE category = 'page' AND (\(conditions)) AND timestamp >= ? AND coalesce(url, '') != ?
+                GROUP BY page_key ORDER BY max(timestamp) DESC LIMIT \(limit)
+                """, arguments: StatementArguments(arguments)).compactMap(Self.visit(from:))
+        } ?? []
+    }
+
     // MARK: Work sessions
 
     func sessionName(_ id: UUID) -> String? {

@@ -45,7 +45,48 @@ public enum GeminiAPI {
         return try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
     }
 
+    /// Request body grounded with Google Search. Structured output can't be
+    /// combined with search grounding, so the JSON is requested in the prompt.
+    public static func groundedRequestBody(system: String, prompt: String, temperature: Double = 0.2) throws -> Data {
+        let body: [String: Any] = [
+            "system_instruction": ["parts": [["text": system]]],
+            "contents": [["role": "user", "parts": [["text": prompt]]]],
+            "tools": [["google_search": [String: Any]()]],
+            "generationConfig": ["temperature": temperature]
+        ]
+        return try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+    }
+
+    /// The first JSON object in free text (handles ```json fences and prose around it).
+    public static func extractJSONObject(from text: String) -> Data? {
+        guard let start = text.firstIndex(of: "{") else { return nil }
+        var depth = 0
+        var inString = false
+        var escaped = false
+        var index = start
+        while index < text.endIndex {
+            let character = text[index]
+            if inString {
+                if escaped { escaped = false }
+                else if character == "\\" { escaped = true }
+                else if character == "\"" { inString = false }
+            } else if character == "\"" {
+                inString = true
+            } else if character == "{" {
+                depth += 1
+            } else if character == "}" {
+                depth -= 1
+                if depth == 0 {
+                    return String(text[start...index]).data(using: .utf8)
+                }
+            }
+            index = text.index(after: index)
+        }
+        return nil
+    }
+
     /// Extracts the model's JSON answer from a `generateContent` response.
+    /// Works for structured output and for JSON embedded in grounded text answers.
     public static func decodeAnswer<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw APIError.invalidResponse }
         if let feedback = root["promptFeedback"] as? [String: Any], let reason = feedback["blockReason"] as? String {
@@ -58,12 +99,14 @@ public enum GeminiAPI {
         guard let content = first["content"] as? [String: Any],
               let parts = content["parts"] as? [[String: Any]] else { throw APIError.emptyCandidate }
         let text = parts.compactMap { $0["text"] as? String }.joined()
-        guard let json = text.data(using: .utf8), !text.isEmpty else { throw APIError.emptyCandidate }
-        do {
-            return try JSONDecoder().decode(T.self, from: json)
-        } catch {
+        guard !text.isEmpty else { throw APIError.emptyCandidate }
+        if let json = text.data(using: .utf8), let decoded = try? JSONDecoder().decode(T.self, from: json) {
+            return decoded
+        }
+        guard let embedded = extractJSONObject(from: text), let decoded = try? JSONDecoder().decode(T.self, from: embedded) else {
             throw APIError.malformedJSON
         }
+        return decoded
     }
 }
 
@@ -71,7 +114,7 @@ public enum GeminiAPI {
 
 /// What Gemini sees in a cropped image (animals, plants, landmarks — never people).
 public struct IdentificationAnswer: Codable, Sendable, Equatable {
-    public var category: String          // "animal" | "plant" | "landmark" | "none"
+    public var category: String          // "animal" | "plant" | "landmark" | "food" | "product" | "none"
     public var name: String              // common name in the user's language
     public var scientificName: String    // or location for landmarks; may be empty
     public var facts: [String]           // up to 3 short facts
@@ -81,7 +124,7 @@ public struct IdentificationAnswer: Codable, Sendable, Equatable {
         [
             "type": "OBJECT",
             "properties": [
-                "category": ["type": "STRING", "enum": ["animal", "plant", "landmark", "none"]],
+                "category": ["type": "STRING", "enum": ["animal", "plant", "landmark", "food", "product", "none"]],
                 "name": ["type": "STRING"],
                 "scientificName": ["type": "STRING"],
                 "facts": ["type": "ARRAY", "items": ["type": "STRING"]],
@@ -93,10 +136,12 @@ public struct IdentificationAnswer: Codable, Sendable, Equatable {
 
     public static func instructions(targetLanguage: String) -> String {
         """
-        Identify the main animal, plant or landmark in the image. Never identify or describe people. \
-        If the subject is a person, food, product, text, or unclear, return category "none". \
+        Identify the main animal, plant, landmark, dish (food) or product in the image. Never identify or describe people. \
+        If the subject is a person, text, or unclear, return category "none". \
         For animals and plants give the common name and the scientific name; for landmarks give the name \
-        and its city/country in scientificName. Give at most 3 short facts (taxonomy, habitat, architect, year). \
+        and its city/country in scientificName; for food give the dish name and its cuisine/region; for products give \
+        the product name and the brand (logos count as the brand). Give at most 3 short facts \
+        (taxonomy, habitat, architect, year, ingredients, maker). \
         confidence is your probability that the name is correct. Answer in the language with code "\(targetLanguage)" \
         (scientific names stay in Latin).
         """

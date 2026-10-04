@@ -31,6 +31,8 @@ final class AppController: ObservableObject {
     private let tracker: ActivityTracker
     private let networkGate: NetworkGate
     private let gemini: GeminiProvider
+    private let mediaContext = MediaContext()
+    private var contextIntel: ContextIntelCoordinator?
     private var wakeObserver: NSObjectProtocol?
     private static let lastResumeOfferKey = "lastResumeOffer"
     private let translationBridge = TranslationBridge()
@@ -72,6 +74,22 @@ final class AppController: ObservableObject {
         }
         gemini = GeminiProvider(gate: networkGate)
         gemini.configure(available: Self.networkPolicy(for: settings).isUsable, model: settings.geminiModel)
+        let overlayForContext = overlay
+        let coordinator = ContextIntelCoordinator(
+            store: memoryStore,
+            research: gemini,
+            media: mediaContext,
+            configuration: Self.contextConfiguration(for: settings)
+        ) { [weak self] message in
+            await MainActor.run {
+                self?.lastMessage = message
+                overlayForContext.show(message, on: NSScreen.main, position: .topRight, briefingPending: false)
+            }
+        }
+        contextIntel = coordinator
+        tracker.onPageChange = { bundleIdentifier, title, url in
+            Task { await coordinator.pageChanged(bundleIdentifier: bundleIdentifier, title: title, url: url) }
+        }
         if let legacy = directory?.appendingPathComponent("visual-memory.json") {
             let store = memoryStore
             Task { await store.importLegacyJSON(at: legacy) }
@@ -198,6 +216,16 @@ final class AppController: ObservableObject {
     }
 
     // MARK: Cloud
+
+    private static func contextConfiguration(for settings: AppSettings) -> ContextIntelCoordinator.Configuration {
+        ContextIntelCoordinator.Configuration(
+            mediaEnabled: settings.mediaModeEnabled,
+            newsEnabled: settings.newsModeEnabled,
+            spoilerLevel: settings.spoilerLevel,
+            targetLanguage: settings.targetLanguage,
+            memoryEnabled: settings.memoryEnabled
+        )
+    }
 
     private static func networkPolicy(for settings: AppSettings) -> NetworkPolicy {
         NetworkPolicy(cloudEnabled: settings.cloudEnabled, hasAPIKey: settings.hasGeminiKey, performanceMode: settings.performanceMode)
@@ -394,6 +422,9 @@ final class AppController: ObservableObject {
         let gate = networkGate
         Task { await gate.update(policy) }
         gemini.configure(available: policy.isUsable, model: settings.geminiModel)
+        let contextConfiguration = Self.contextConfiguration(for: settings)
+        let coordinator = contextIntel
+        Task { await coordinator?.update(contextConfiguration) }
         let store = memoryStore
         let retention = settings.memoryRetentionDays
         let language = settings.targetLanguage
@@ -453,6 +484,7 @@ final class AppController: ObservableObject {
             reasoner: reasoner,
             screenShare: screenShare,
             page: tracker.page,
+            media: mediaContext,
             cloud: gemini,
             displayID: displayID,
             present: { event in

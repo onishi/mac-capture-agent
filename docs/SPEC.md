@@ -64,7 +64,7 @@ macOS 上でユーザーが見ている画面を継続的に観察し、AI が�
 | SI-4 | 領域抽出（字幕・画像・人物・Terminal などの種類別） | 🟡 | 変化領域の矩形のみ。種類別の検出は未実装 |
 | SI-5 | 認識対象: テキスト | ✅ | Vision OCR |
 | SI-6 | 認識対象: 動物・植物・食品・ランドマーク・人物（粗分類） | 🟡 | `VNClassifyImageRequest` の粗分類のみ、表示には未使用 |
-| SI-7 | 認識対象: 商品・ロゴ・グラフ・地図・UI | ⬜ | |
+| SI-7 | 認識対象: 商品・ロゴ・グラフ・地図・UI | 🟡 | 商品・食品（ロゴはブランドとして）を Gemini で識別（オプトイン）。グラフ・地図・UI は未対応 |
 | SI-8 | 認識対象: ソースコード・エラーメッセージ | ✅ | Coding Mode（§3.6） |
 | SI-9 | 認識対象: QR コード・URL・日付・金額 | 🟡 | QR コード（Vision）を検出し、行き先（ホスト＋パス）を HUD に表示。日付・金額は未対応 |
 
@@ -100,9 +100,9 @@ macOS 上でユーザーが見ている画面を継続的に観察し、AI が�
 
 | ID | 要件 | 状態 | 備考 |
 | --- | --- | --- | --- |
-| MV-1 | 映画・アニメモード: 俳優・声優・キャラクター・作品名・原作・ロケ地・劇中歌 | ⬜ | |
-| MV-2 | ネタバレ制御（0 完全禁止 / 1 現在地点以前 / 2 軽度 / 3 制限なし） | ⬜ | レベル 1 は再生位置の取得が必要で難度が高い |
-| NW-1 | ニュース理解: 人物・組織・国・過去事件・関連ニュース | ⬜ | Web 検索が前提 |
+| MV-1 | 映画・アニメモード: 俳優・声優・キャラクター・作品名・原作・ロケ地・劇中歌 | 🟡 | 配信サイトのタイトルから作品・話数を解析し、Gemini で作品カード（年・原作・主要キャスト／声優・主題歌・あらすじ）。字幕・テロップのキャラクター名／演者名をキャストと照合して表示。ロケ地は未対応 |
+| MV-2 | ネタバレ制御（0 完全禁止 / 1 現在地点以前 / 2 軽度 / 3 制限なし） | ✅ | 4 段階。レベル 1 はタイトルの話数まで（話数が無ければ 0 と同じ）。再生位置（分単位）は未使用 |
+| NW-1 | ニュース理解: 人物・組織・国・過去事件・関連ニュース | ✅ | ニュース記事を開くと Gemini（Google 検索連携）で背景・経緯（日付つき）・関連人物。Gemini なしでは過去に読んだ関連記事 |
 
 ### 3.6 プログラミング支援（Coding Mode）
 
@@ -146,7 +146,7 @@ macOS 上でユーザーが見ている画面を継続的に観察し、AI が�
 | ID | 要件 | 状態 | 備考 |
 | --- | --- | --- | --- |
 | RT-1 | 「何があるか」ではなく「何を調べる価値があるか」を判定 | ✅ | ルールベース |
-| RT-2 | アクション: translate / identify_person / identify_animal / identify_plant / identify_landmark / explain_term / explain_error / identify_product / ignore | 🟡 | explain_error と explain_code を追加。identify_product は未定義 |
+| RT-2 | アクション: translate / identify_person / identify_animal / identify_plant / identify_landmark / explain_term / explain_error / identify_product / ignore | ✅ | すべて定義（＋ explain_code） |
 | RT-3 | ignore を優先、当たり前の情報を避ける | ✅ | |
 | RT-4 | 出力は構造化（action / confidence / importance / region） | ✅ | `RoutedAction` |
 | RT-5 | LLM ベースのルーター（§10 のプロンプト） | ✅ | スコア 0.5〜0.7 の候補だけを Foundation Models（`@Generable`）で判定。8 秒に 1 回まで |

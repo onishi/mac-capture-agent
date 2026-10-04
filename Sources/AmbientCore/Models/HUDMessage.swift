@@ -23,6 +23,12 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
         case identification
         /// A public figure named on screen (title = name, original = role).
         case publicFigure
+        /// The film / series / anime being watched (title = work, original = kind · year · episode).
+        case mediaInfo
+        /// A character or performer of the current work named on screen.
+        case cast
+        /// Background of a news story (title = heading, original = headline).
+        case newsContext
     }
 
     public let id: UUID

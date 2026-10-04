@@ -165,6 +165,20 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Movie, anime & news") {
+                Toggle("Movie / Anime mode (work card, cast on screen)", isOn: $settings.mediaModeEnabled)
+                Picker("Spoilers", selection: $settings.spoilerLevel) {
+                    ForEach(SpoilerLevel.allCases) { level in
+                        Text(level.displayName).tag(level)
+                    }
+                }
+                .disabled(!settings.mediaModeEnabled)
+                Toggle("News mode (background of the story)", isOn: $settings.newsModeEnabled)
+                Text("Work cards and news backgrounds use Gemini (window title or headline only). Without it, News mode shows related pages you read earlier. Both need “Remember pages you read”. “Up to where I am” uses the episode number in the title; without one it behaves like “No spoilers”.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Screen sharing") {
                 Toggle("Warn about secrets while sharing the screen", isOn: $settings.warnSensitiveWhileSharing)
                 Toggle("Cover secrets while sharing (experimental)", isOn: $settings.redactWhileSharing)

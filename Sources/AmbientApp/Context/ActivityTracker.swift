@@ -15,6 +15,8 @@ final class ActivityTracker {
     }
 
     let page = PageContext()
+    /// Called when a different page comes to the front (for Movie / News modes).
+    var onPageChange: ((_ bundleIdentifier: String?, _ title: String?, _ url: URL?) -> Void)?
     private let store: IntelStore
     private let foreground: ForegroundContextProvider
     private let namer: (any SessionNaming)?
@@ -109,6 +111,7 @@ final class ActivityTracker {
         let key = PageKey(bundleIdentifier: app.bundleIdentifier, windowTitle: title, url: lastURL)
 
         if current?.key != key {
+            onPageChange?(app.bundleIdentifier, title, lastURL)
             flush(at: now)
             current = CurrentPage(key: key, application: app.appName, bundleIdentifier: app.bundleIdentifier,
                                   title: title, url: lastURL, start: now, lastActive: now)

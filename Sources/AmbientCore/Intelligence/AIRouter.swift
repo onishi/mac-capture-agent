@@ -98,7 +98,7 @@ public final class AIRouter: Sendable {
         case .plant: return .identifyPlant
         case .landmark: return .identifyLandmark
         case .person: return .identifyPerson
-        case .food, .text, .unknown: return nil
+        case .food, .product, .text, .unknown: return nil
         }
     }
 }

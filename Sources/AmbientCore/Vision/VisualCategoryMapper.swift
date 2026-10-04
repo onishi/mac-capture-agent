@@ -13,6 +13,8 @@ public enum VisualCategoryMapper {
                  "cake", "sushi", "pizza", "salad", "coffee", "baked_goods"]),
         (.landmark, ["landmark", "monument", "tower", "bridge", "castle", "temple", "shrine", "cathedral",
                      "church", "skyscraper", "cityscape", "statue", "palace", "ruins", "pyramid"]),
+        (.product, ["car", "automobile", "vehicle", "phone", "smartphone", "laptop", "computer", "watch", "shoe",
+                    "sneaker", "handbag", "bag", "bottle", "camera", "headphones", "guitar", "bicycle", "furniture", "chair"]),
         (.text, ["document", "text", "screenshot", "printed_page", "handwriting", "sign", "poster", "menu"])
     ]
 

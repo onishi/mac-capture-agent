@@ -81,3 +81,27 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertTrue(cleared.isEmpty)
     }
 }
+
+final class RelatedPagesTests: XCTestCase {
+    func testRelatedPagesByTitleKeywords() async {
+        let store = IntelStore(url: nil, retentionDays: 30, userLanguage: "ja", embedding: RelatedNoEmbedding())
+        func visit(_ title: String, _ url: String, daysAgo: Double) -> PageVisit {
+            let start = Date().addingTimeInterval(-daysAgo * 86400)
+            let parsed = URL(string: url)
+            return PageVisit(key: PageKey(bundleIdentifier: "com.apple.Safari", windowTitle: title, url: parsed), application: "Safari",
+                             bundleIdentifier: "com.apple.Safari", title: title, url: parsed, start: start, end: start.addingTimeInterval(120))
+        }
+        await store.recordPageVisit(visit("Central bank holds interest rates", "https://www.reuters.com/a", daysAgo: 3))
+        await store.recordPageVisit(visit("Weather in Tokyo", "https://example.com/w", daysAgo: 1))
+        let related = await store.relatedPages(keywords: ["interest", "rates"], excludingURL: URL(string: "https://www.reuters.com/b"),
+                                               since: Date().addingTimeInterval(-30 * 86400))
+        XCTAssertEqual(related.map(\.title), ["Central bank holds interest rates"])
+        let excluded = await store.relatedPages(keywords: ["interest"], excludingURL: URL(string: "https://www.reuters.com/a"),
+                                                since: Date().addingTimeInterval(-30 * 86400))
+        XCTAssertTrue(excluded.isEmpty)
+    }
+}
+
+private struct RelatedNoEmbedding: TextEmbedding {
+    func vector(for text: String, language: String) -> [Float]? { nil }
+}

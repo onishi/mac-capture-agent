@@ -7,6 +7,7 @@ public enum VisualCategory: String, Sendable, CaseIterable, Equatable {
     case plant
     case food
     case landmark
+    case product
     case text
     case unknown
 }

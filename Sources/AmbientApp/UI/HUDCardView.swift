@@ -78,6 +78,13 @@ struct HUDCardView: View {
                 actionButton("COPY", .copy)
             case .resume:
                 actionButton("SESSIONS", .openArchive)
+            case .mediaInfo, .cast:
+                actionButton("WEB", .webSearch)
+                actionButton("WIKI", .wikipedia)
+                actionButton("NOT USEFUL", .notUseful)
+            case .newsContext:
+                actionButton("WEB", .webSearch)
+                actionButton("NOT USEFUL", .notUseful)
             case .identification, .publicFigure:
                 actionButton("COPY", .copy)
                 actionButton("WEB", .webSearch)
@@ -95,7 +102,8 @@ struct HUDCardView: View {
                 if let language = message.sourceLanguage {
                     actionButton("MUTE \(LanguageCode.base(language).uppercased())", .skipLanguage)
                 }
-            case .errorAnalysis, .codeSummary, .securityWarning, .qrCode, .resume, .identification, .publicFigure:
+            case .errorAnalysis, .codeSummary, .securityWarning, .qrCode, .resume, .identification, .publicFigure,
+                 .mediaInfo, .cast, .newsContext:
                 EmptyView()
             }
             Spacer(minLength: 0)
@@ -137,6 +145,9 @@ struct HUDCardView: View {
         case .resume: return "RESUME // LAST OPERATION"
         case .identification: return "TARGET // IDENTIFICATION"
         case .publicFigure: return "DOSSIER // PUBLIC FIGURE"
+        case .mediaInfo: return "DOSSIER // FEATURE"
+        case .cast: return "CAST // ON SCREEN"
+        case .newsContext: return "BRIEFING // BACKGROUND"
         }
     }
 
@@ -151,6 +162,9 @@ struct HUDCardView: View {
         case .resume: return "RESUME"
         case .identification: return "ID"
         case .publicFigure: return "DOSSIER"
+        case .mediaInfo: return "FEATURE"
+        case .cast: return "CAST"
+        case .newsContext: return "NEWS"
         }
     }
 
@@ -158,7 +172,7 @@ struct HUDCardView: View {
     private var tint: Color {
         switch message.kind {
         case .errorAnalysis, .securityWarning: return SpyTheme.alert
-        case .resume, .publicFigure: return SpyTheme.intel
+        case .resume, .publicFigure, .mediaInfo, .cast, .newsContext: return SpyTheme.intel
         case .translation, .explanation, .codeSummary, .qrCode, .identification: return SpyTheme.accent
         }
     }
