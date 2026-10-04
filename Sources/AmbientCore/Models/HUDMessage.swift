@@ -7,6 +7,8 @@ import CoreGraphics
 public struct HUDMessage: Sendable, Equatable, Identifiable {
     public enum Kind: String, Sendable {
         case translation
+        /// A technical term explained (title = term, original = expansion, detail = explanation).
+        case explanation
     }
 
     public let id: UUID
@@ -24,6 +26,8 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
     /// Detection confidence (0...1), shown as a meter.
     public let confidence: Double?
     public let capturedAt: Date
+    /// When the subject was last seen before (re-appearance notice), if ever.
+    public let previouslySeen: Date?
 
     public init(
         id: UUID = UUID(),
@@ -36,7 +40,8 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
         sourceLanguage: String? = nil,
         targetLanguage: String? = nil,
         confidence: Double? = nil,
-        capturedAt: Date = Date()
+        capturedAt: Date = Date(),
+        previouslySeen: Date? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -49,6 +54,14 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
         self.targetLanguage = targetLanguage
         self.confidence = confidence.map { min(max($0, 0), 1) }
         self.capturedAt = capturedAt
+        self.previouslySeen = previouslySeen
+    }
+
+    /// A copy with a re-appearance date attached.
+    public func withPreviouslySeen(_ date: Date?) -> HUDMessage {
+        HUDMessage(id: id, kind: kind, title: title, original: original, detail: detail, anchor: anchor,
+                   features: features, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage,
+                   confidence: confidence, capturedAt: capturedAt, previouslySeen: date)
     }
 
     /// Display time is extended while a briefing is being generated.

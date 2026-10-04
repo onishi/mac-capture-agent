@@ -41,6 +41,17 @@ public struct VisualMemoryIndex: Sendable, Equatable, Codable {
     /// - Parameters:
     ///   - queryEmbedding: embedding of `query.text` in the user's language, if available.
     public func search(_ query: MemoryQuery, queryEmbedding: [Float]?, now: Date, limit: Int) -> [MemorySearchResult] {
+        Self.rank(entries, query: query, queryEmbedding: queryEmbedding, now: now, limit: limit)
+    }
+
+    /// Hybrid ranking shared by every store (in-memory and SQLite).
+    public static func rank(
+        _ entries: [VisualMemoryEntry],
+        query: MemoryQuery,
+        queryEmbedding: [Float]?,
+        now: Date,
+        limit: Int
+    ) -> [MemorySearchResult] {
         let filtered = entries.filter { entry in
             if let range = query.dateRange, !range.contains(entry.timestamp) { return false }
             if let language = query.language, entry.sourceLanguage.map(LanguageCode.base) != language { return false }
@@ -51,8 +62,8 @@ public struct VisualMemoryIndex: Sendable, Equatable, Codable {
         let results: [MemorySearchResult] = filtered.compactMap { entry in
             let recency = 0.1 * exp(-now.timeIntervalSince(entry.timestamp) / (3 * 24 * 60 * 60))
             guard hasText else { return MemorySearchResult(entry: entry, score: 0.5 + recency) }
-            let keyword = Self.keywordScore(query.text, in: entry.searchableText)
-            let semantic = Self.semanticScore(queryEmbedding, entry.embedding)
+            let keyword = keywordScore(query.text, in: entry.searchableText)
+            let semantic = semanticScore(queryEmbedding, entry.embedding)
             let relevance = max(keyword, semantic * 0.9)
             // Without filters, require real relevance. With filters, keep every
             // match of the filter but rank relevant ones first.

@@ -5,6 +5,7 @@ import Foundation
 public struct VisualMemoryEntry: Sendable, Equatable, Codable, Identifiable {
     public enum Kind: String, Sendable, Codable {
         case translation
+        case explanation
     }
 
     public let id: UUID

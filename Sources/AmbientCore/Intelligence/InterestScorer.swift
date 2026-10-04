@@ -48,6 +48,19 @@ public struct InterestScorer: Sendable {
         return InterestScore(score)
     }
 
+    /// Technical terms are never shown by the rules alone: they land in the
+    /// optional band and an on-device LLM decides (RouterEscalation).
+    public func scoreTerm(_ candidate: TermCandidate, context: AnalysisContext) -> InterestScore {
+        var score = 0.58
+        if let region = candidate.region, region.minY < menuBarHeight {
+            score -= 0.3
+        }
+        if AppContextClassifier.classify(bundleIdentifier: context.bundleIdentifier) == .coding {
+            score += 0.04   // jargon is likely relevant while coding
+        }
+        return InterestScore(score)
+    }
+
     /// Visual identification is not implemented in v0.1, so these stay below the
     /// show threshold. Person identification is deliberately kept very low.
     public func scoreVisual(_ category: VisualCategory, context: AnalysisContext) -> InterestScore {

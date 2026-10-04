@@ -26,6 +26,8 @@ public struct RoutedAction: Sendable, Equatable {
     public let payload: String?
     /// BCP-47 code of the payload language, when known.
     public let sourceLanguage: String?
+    /// Surrounding text for disambiguation (e.g. the sentence around a term).
+    public let context: String?
 
     public init(
         action: SuggestedAction,
@@ -33,7 +35,8 @@ public struct RoutedAction: Sendable, Equatable {
         importance: Double,
         region: CGRect?,
         payload: String?,
-        sourceLanguage: String? = nil
+        sourceLanguage: String? = nil,
+        context: String? = nil
     ) {
         self.action = action
         self.confidence = confidence
@@ -41,6 +44,7 @@ public struct RoutedAction: Sendable, Equatable {
         self.region = region
         self.payload = payload
         self.sourceLanguage = sourceLanguage
+        self.context = context
     }
 
     public static let ignore = RoutedAction(action: .ignore, confidence: 1, importance: 0, region: nil, payload: nil)

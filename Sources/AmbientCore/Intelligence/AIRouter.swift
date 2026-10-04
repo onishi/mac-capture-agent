@@ -8,6 +8,7 @@ public final class AIRouter: Sendable {
     private let detector: ForeignTextDetector
     private let scorer: InterestScorer
     private let adjuster: any InterestAdjusting
+    private let termExtractor = TermExtractor()
 
     public init(
         detector: ForeignTextDetector,
@@ -47,6 +48,19 @@ public final class AIRouter: Sendable {
                 region: region.boundingBox,
                 payload: foreign.text,
                 sourceLanguage: foreign.language.code
+            ))
+        }
+
+        for term in termExtractor.candidates(in: context.textRegions) {
+            let features = PersonalizationFeatures(action: .explainTerm, language: nil, bundleIdentifier: context.bundleIdentifier)
+            let score = adjuster.adjust(scorer.scoreTerm(term, context: context), features: features)
+            result.append(RoutedAction(
+                action: .explainTerm,
+                confidence: 0.5,
+                importance: score.value,
+                region: term.region,
+                payload: term.term,
+                context: term.context
             ))
         }
 
