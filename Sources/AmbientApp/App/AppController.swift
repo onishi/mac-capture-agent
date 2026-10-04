@@ -80,9 +80,9 @@ final class AppController: ObservableObject {
             research: gemini,
             media: mediaContext,
             configuration: Self.contextConfiguration(for: settings)
-        ) { [weak self] message in
+        ) { message in
+            // Context cards (work, news) are top-right; their actions are handled by the overlay.
             await MainActor.run {
-                self?.lastMessage = message
                 overlayForContext.show(message, on: NSScreen.main, position: .topRight, briefingPending: false)
             }
         }
