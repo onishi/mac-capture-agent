@@ -1,4 +1,4 @@
-# Ambient Screen Intelligence (v0.3)
+# Ambient Screen Intelligence (v0.4)
 
 ユーザーが見ている画面を AI も一緒に見て、**本当に価値があるときだけ**静かに補足情報を出す macOS メニューバーアプリです。
 
@@ -64,6 +64,7 @@ swift test
 | Resume | 再開 |
 | Last: … / Not Useful | 直前の HUD を「役に立たない」と学習させ、似た表示を減らす |
 | Stop Translating <言語> | 直前の HUD の言語を今後翻訳しない |
+| Archive… (⌥⌘K) | Visual Memory の検索ウィンドウを開く（⌥⌘K はどこからでも有効） |
 | Preview HUD | マウスポインタ付近にデモの HUD を表示（見た目の確認用） |
 | Translation Languages… | 翻訳言語モデルの設定画面を開く |
 | Settings… | 翻訳先言語、モード、除外アプリなど |
@@ -113,6 +114,11 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **AI Router（ignore-first）**: ルールベースの `InterestScorer` で 0.0〜1.0 のスコアを付け、0.7 以上のものだけ表示。メニューバー領域の文字やコーディングアプリでは減点
 - **Cooldown**: 同じ内容は 5 分間再表示しない（OCR の揺れを吸収する正規化キー）
 - **HUD**: 透明・最前面・クリック透過の `NSPanel` + SwiftUI。fade in 300ms → 3〜6 秒表示 → fade out 400ms。画面右上に表示
+- **Visual Memory / Semantic Search（v0.4）**: HUD に表示した情報（原文・翻訳・BRIEF・アプリ・ウィンドウタイトル・言語・時刻）だけを記録し、⌥⌘K の「ARCHIVE」ウィンドウから自然言語で検索
+  - 「昨日見ていたフランス語の美術館」「German train notice today」「さっきの英語」のような日付・言語の指定を解釈（`MemoryQueryParser`）
+  - キーワード一致（日本語は 2 文字単位の部分一致）＋ NaturalLanguage のオンデバイス文埋め込みによる意味検索＋新しさで順位付け（`VisualMemoryIndex`）
+  - 記録をクリックすると翻訳をコピーし、Personalization に「検索した（score ++）」として反映
+  - 保存先はサンドボックス内の Application Support（JSON、バックアップ対象外）。保持期間 1 / 7 / 30 日（既定 7 日）、最大 1,000 件。設定とアーカイブ画面から全削除できる
 - **SF スパイ映画風 HUD（v0.3）**: 画面全体を覆う透過・クリック透過レイヤーに描画
   - 対象テキストへのロックオン・レティクル（`ACQUIRING` → `LOCKED`）と、カードへ伸びる点線の引き出し線
   - ダークガラスのインテル・カード: `◢ INTERCEPT // LINGUISTIC` ヘッダ、ターゲットコード、`FR ▸ JA`、10 段の信頼度メーター、走査線、スキャンスイープ
@@ -125,7 +131,7 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **Pause / Resume**: 5 分・30 分・無期限。停止中はキャプチャ自体を止める
 - **Privacy**: 除外アプリ（1Password などのパスワードマネージャー、メッセージ、写真）とパスワード系ウィンドウタイトルでは解析しない
 - **Performance Mode**: Battery / Balanced / Performance（キャプチャ 5/15/30fps、Vision 0.5/1/2fps）
-- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization、DecodeEffect、Briefing など 74 件
+- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization、DecodeEffect、Briefing、VisualMemory など 87 件
 
 ## プロジェクト構成
 
@@ -141,7 +147,8 @@ Sources/
 │   ├── Privacy/            PrivacyPolicy
 │   ├── Presentation/       HUDPlacement
 │   ├── Settings/           PerformanceMode
-│   └── Future/             AnalysisResult, VisualMemory（将来用のプロトコル）
+│   ├── Memory/             VisualMemoryEntry, VisualMemoryIndex, MemoryQueryParser
+│   └── Future/             AnalysisResult
 └── AmbientApp/             macOS アプリ（Xcode ターゲット）
     ├── App/                SwiftUI App, AppDelegate, AppController, AppSettings
     ├── Capture/            ScreenCaptureManager, FrameBuffer, FrameConverter
@@ -173,7 +180,7 @@ Xcode プロジェクトは Xcode 16 の「同期フォルダ」を使ってい�
 
 ## 今後の予定
 
-- Visual Memory（timestamp / app / window title / URL / entities / summary / embedding）と Semantic Search（`VisualMemoryStore`）
+- Visual Memory の対象拡大（HUD に出さなかったテキストや、ブラウザの URL もオプトインで記録）
 - Web Search（person / animal / plant / landmark / product / news / technical term）
 - Movie Mode（俳優、キャラクター、ロケ地、音楽）
 - Coding Mode（VS Code / Terminal のコード説明、エラー解析）— `AppContextClassifier` で検出済み
@@ -184,6 +191,7 @@ Xcode プロジェクトは Xcode 16 の「同期フォルダ」を使ってい�
 
 - **Local First**: OCR・言語判定・翻訳・画像分類はすべて Mac 上で実行します
 - **保存しない**: 画面キャプチャはメモリ上でのみ扱い、ディスクに保存しません。前フレームは 320px の輝度サムネイルだけを保持します
+- **Visual Memory**: 記録するのは HUD に実際に表示したテキストと付随情報だけで、画像は一切保存しません。保存先はこの Mac のアプリ専用領域で、バックアップ対象外です。設定でオフにでき、いつでも全削除できます
 - **送信しない**: アプリはサンドボックス化されており、ネットワークの Entitlement を持ちません。Cloud AI は未実装で、将来導入する場合も明示的なオプトインとします
 - **除外**: パスワードマネージャー、メッセージ、写真などはキャプチャ画像から除去され、解析もされません。パスワード入力画面らしいウィンドウタイトルでも解析を止めます。除外アプリは設定画面で追加できます
 - **ログ**: OCR したテキストの本文はログに記録しません（件数・文字数・言語コードのみ）

@@ -28,6 +28,7 @@ final class AppController: ObservableObject {
     private let classifier = ImageClassifier()
     private let personalization: PersonalizationStore
     let briefingProvider = AppleIntelligenceBriefingProvider()
+    let memoryStore: FileVisualMemoryStore
 
     private var pipelineTask: Task<Void, Never>?
     private var resumeTask: Task<Void, Never>?
@@ -44,6 +45,7 @@ final class AppController: ObservableObject {
         personalization = PersonalizationStore(model: settings.loadPersonalizationModel()) { [weak settings] model in
             DispatchQueue.main.async { settings?.savePersonalizationModel(model) }
         }
+        memoryStore = FileVisualMemoryStore(retentionDays: settings.memoryRetentionDays, userLanguage: settings.targetLanguage)
         overlay.onHover = { [weak self] message in
             self?.recordFeedback(.openedDetails, for: message)
         }
@@ -194,6 +196,17 @@ final class AppController: ObservableObject {
         Log.app.info("Language skipped by user: \(language, privacy: .public)")
     }
 
+    /// Opening a record in the archive counts as "searched" (score ++).
+    func recordSearch(for entry: VisualMemoryEntry) {
+        guard let features = entry.features else { return }
+        personalization.record(.searched, for: features)
+    }
+
+    func purgeMemory() {
+        let store = memoryStore
+        Task { await store.removeAll() }
+    }
+
     func resetPersonalization() {
         personalization.reset()
         settings.skippedLanguages.removeAll()
@@ -232,6 +245,10 @@ final class AppController: ObservableObject {
     }
 
     private func settingsDidChange() {
+        let store = memoryStore
+        let retention = settings.memoryRetentionDays
+        let language = settings.targetLanguage
+        Task { await store.configure(retentionDays: retention, userLanguage: language) }
         guard status == .running else { return }
         if settings.pipelineConfiguration != runningConfiguration {
             Log.app.info("Settings changed, restarting pipeline")
@@ -282,6 +299,7 @@ final class AppController: ObservableObject {
             translator: AppleTranslationProvider(bridge: translationBridge),
             foreground: foreground,
             briefingProvider: briefingProvider,
+            memory: memoryStore,
             present: { event in
                 await MainActor.run { [weak self] in
                     switch event {

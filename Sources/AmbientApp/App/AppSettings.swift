@@ -15,6 +15,8 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         static let followMouseDisplay = "followMouseDisplay"
         static let personalization = "personalizationModel"
         static let briefing = "briefingEnabled"
+        static let memory = "memoryEnabled"
+        static let memoryRetention = "memoryRetentionDays"
     }
 
     static let supportedTargetLanguages = ["ja", "en", "zh-Hans", "zh-Hant", "ko", "fr", "de", "es", "it", "pt"]
@@ -55,6 +57,15 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         didSet { defaults.set(briefingEnabled, forKey: Key.briefing) }
     }
 
+    /// Archive surfaced intel (text only) for later search.
+    @Published var memoryEnabled: Bool {
+        didSet { defaults.set(memoryEnabled, forKey: Key.memory) }
+    }
+    @Published var memoryRetentionDays: Int {
+        didSet { defaults.set(memoryRetentionDays, forKey: Key.memoryRetention) }
+    }
+    static let retentionChoices = [1, 7, 30]
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         let systemLanguage = Locale.preferredLanguages.first.map(LanguageCode.base) ?? "ja"
@@ -69,6 +80,9 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         hudPosition = defaults.string(forKey: Key.hudPosition).flatMap(HUDPosition.init(rawValue:)) ?? .nearTarget
         followMouseDisplay = defaults.bool(forKey: Key.followMouseDisplay)
         briefingEnabled = defaults.object(forKey: Key.briefing) as? Bool ?? true
+        memoryEnabled = defaults.object(forKey: Key.memory) as? Bool ?? true
+        let retention = defaults.integer(forKey: Key.memoryRetention)
+        memoryRetentionDays = Self.retentionChoices.contains(retention) ? retention : 7
     }
 
     // MARK: Personalization (aggregated weights only, never screen content)
@@ -99,7 +113,8 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
             performanceMode: performanceMode,
             imageClassificationEnabled: imageClassificationEnabled,
             privacyPolicy: PrivacyPolicy(excludedBundleIdentifiers: excludedBundleIdentifiers),
-            briefingEnabled: briefingEnabled
+            briefingEnabled: briefingEnabled,
+            memoryEnabled: memoryEnabled
         )
     }
 }

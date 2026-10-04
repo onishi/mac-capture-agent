@@ -9,6 +9,7 @@ struct PipelineConfiguration: Sendable, Equatable {
     var imageClassificationEnabled: Bool
     var privacyPolicy: PrivacyPolicy
     var briefingEnabled: Bool
+    var memoryEnabled: Bool
 }
 
 /// What the pipeline asks the HUD to do.
@@ -38,6 +39,7 @@ actor AnalysisPipeline {
     private let foreground: ForegroundContextProvider
     private let present: Presenter
     private let briefingProvider: (any BriefingProvider)?
+    private let memory: (any VisualMemoryStore)?
     private let briefingTimeout: Duration = .seconds(5)
 
     private var lastDetection: TimeInterval = 0
@@ -56,6 +58,7 @@ actor AnalysisPipeline {
         translator: any TranslationProvider,
         foreground: ForegroundContextProvider,
         briefingProvider: (any BriefingProvider)?,
+        memory: (any VisualMemoryStore)?,
         present: @escaping Presenter
     ) {
         self.configuration = configuration
@@ -76,6 +79,7 @@ actor AnalysisPipeline {
         self.foreground = foreground
         self.present = present
         self.briefingProvider = configuration.briefingEnabled ? briefingProvider : nil
+        self.memory = configuration.memoryEnabled ? memory : nil
     }
 
     /// Consumes frames until the stream finishes or the task is cancelled.
@@ -149,7 +153,7 @@ actor AnalysisPipeline {
 
         switch action.action {
         case .translate:
-            await translate(action, app: app, timestamp: frame.timestamp)
+            await translate(action, app: app, windowTitle: windowTitle, timestamp: frame.timestamp)
         case .explainTerm, .identifyAnimal, .identifyPlant, .identifyLandmark, .identifyPerson, .ignore:
             // Not implemented in v0.1 (the router keeps them below the show threshold).
             break
@@ -174,7 +178,7 @@ actor AnalysisPipeline {
         return categories
     }
 
-    private func translate(_ action: RoutedAction, app: ForegroundContextProvider.Snapshot, timestamp: TimeInterval) async {
+    private func translate(_ action: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval) async {
         guard let text = action.payload else { return }
         let key = CooldownCache.key(action: action.action, payload: text)
         guard cooldown.checkAndRecord(key, now: timestamp) else {
@@ -212,6 +216,18 @@ actor AnalysisPipeline {
             )
             let briefing = briefingProvider.flatMap { $0.isAvailable ? $0 : nil }
             await present(.show(message, briefingPending: briefing != nil))
+            await memory?.remember(VisualMemoryEntry(
+                id: message.id,
+                timestamp: message.capturedAt,
+                application: app.appName,
+                bundleIdentifier: app.bundleIdentifier,
+                windowTitle: windowTitle,
+                sourceLanguage: message.sourceLanguage,
+                targetLanguage: message.targetLanguage,
+                original: message.original,
+                translation: message.detail,
+                features: message.features
+            ))
             if let briefing {
                 requestBriefing(from: briefing, for: message, appName: app.appName)
             }
@@ -230,6 +246,7 @@ actor AnalysisPipeline {
             appName: appName
         )
         let present = self.present
+        let memory = self.memory
         let timeout = briefingTimeout
         Task.detached(priority: .utility) {
             let text: String? = await withTaskGroup(of: String?.self) { group in
@@ -251,6 +268,9 @@ actor AnalysisPipeline {
                 return first
             }
             await present(.briefing(messageID: message.id, text: text))
+            if let text {
+                await memory?.updateBriefing(text, for: message.id)
+            }
         }
     }
 

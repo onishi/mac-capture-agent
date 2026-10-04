@@ -3,12 +3,14 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     var onResetPersonalization: (() -> Void)?
+    var onPurgeMemory: (() -> Void)?
     var briefingAvailable: Bool = AppleIntelligenceBriefingProvider().isAvailable
     @State private var newBundleIdentifier = ""
 
-    init(settings: AppSettings, onResetPersonalization: (() -> Void)? = nil) {
+    init(settings: AppSettings, onResetPersonalization: (() -> Void)? = nil, onPurgeMemory: (() -> Void)? = nil) {
         _settings = ObservedObject(wrappedValue: settings)
         self.onResetPersonalization = onResetPersonalization
+        self.onPurgeMemory = onPurgeMemory
     }
 
     var body: some View {
@@ -59,6 +61,22 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Visual memory") {
+                Toggle("Archive intel shown in the HUD", isOn: $settings.memoryEnabled)
+                Picker("Keep for", selection: $settings.memoryRetentionDays) {
+                    ForEach(AppSettings.retentionChoices, id: \.self) { days in
+                        Text(days == 1 ? "1 day" : "\(days) days").tag(days)
+                    }
+                }
+                .disabled(!settings.memoryEnabled)
+                Text("Only the text shown in the HUD is archived (never screenshots), on this Mac only. Search it with ⌥⌘K.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let onPurgeMemory {
+                    Button("Purge Archive", role: .destructive, action: onPurgeMemory)
+                }
+            }
+
             Section("HUD") {
                 Picker("Position", selection: $settings.hudPosition) {
                     ForEach(HUDPosition.allCases) { position in
@@ -104,7 +122,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 640)
+        .frame(width: 480, height: 720)
     }
 
     private func addBundleIdentifier() {

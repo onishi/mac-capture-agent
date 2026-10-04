@@ -7,6 +7,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let controller: AppController
     private let openSettings: () -> Void
+    private let openArchive: () -> Void
     private var statusObservation: AnyCancellable?
 
     private static let timeFormatter: DateFormatter = {
@@ -16,9 +17,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         return formatter
     }()
 
-    init(controller: AppController, openSettings: @escaping () -> Void) {
+    init(controller: AppController, openSettings: @escaping () -> Void, openArchive: @escaping () -> Void) {
         self.controller = controller
         self.openSettings = openSettings
+        self.openArchive = openArchive
         super.init()
 
         let menu = NSMenu()
@@ -75,6 +77,9 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
         menu.addItem(item("Translation Languages…", #selector(openTranslationLanguages)))
+        let archive = item("Archive…", #selector(showArchive), key: "k")
+        archive.keyEquivalentModifierMask = [.command, .option]
+        menu.addItem(archive)
         menu.addItem(item("Preview HUD", #selector(previewHUD)))
         menu.addItem(item("Settings…", #selector(showSettings), key: ","))
         menu.addItem(.separator())
@@ -87,6 +92,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     @objc private func pauseThirtyMinutes() { controller.pause(for: 30 * 60) }
     @objc private func pauseIndefinitely() { controller.pause(for: nil) }
     @objc private func resume() { Task { await controller.resume() } }
+    @objc private func showArchive() { openArchive() }
     @objc private func previewHUD() { controller.showDemoHUD() }
     @objc private func markNotUseful() { controller.markLastMessageNotUseful() }
     @objc private func stopTranslatingLanguage() { controller.stopTranslatingLastLanguage() }

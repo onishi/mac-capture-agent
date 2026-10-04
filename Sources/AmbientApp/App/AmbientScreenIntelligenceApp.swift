@@ -8,9 +8,11 @@ struct AmbientScreenIntelligenceApp: App {
         // The app lives in the menu bar (see MenuBarController); this scene
         // only backs the standard Settings command (⌘,).
         Settings {
-            SettingsView(settings: appDelegate.settings) {
-                appDelegate.resetPersonalization()
-            }
+            SettingsView(
+                settings: appDelegate.settings,
+                onResetPersonalization: { appDelegate.resetPersonalization() },
+                onPurgeMemory: { appDelegate.purgeMemory() }
+            )
         }
     }
 }

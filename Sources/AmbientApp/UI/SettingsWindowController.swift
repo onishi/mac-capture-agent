@@ -6,10 +6,12 @@ final class SettingsWindowController {
     private var window: NSWindow?
     private let settings: AppSettings
     private let onResetPersonalization: () -> Void
+    private let onPurgeMemory: () -> Void
 
-    init(settings: AppSettings, onResetPersonalization: @escaping () -> Void) {
+    init(settings: AppSettings, onResetPersonalization: @escaping () -> Void, onPurgeMemory: @escaping () -> Void) {
         self.settings = settings
         self.onResetPersonalization = onResetPersonalization
+        self.onPurgeMemory = onPurgeMemory
     }
 
     func show() {
@@ -20,7 +22,7 @@ final class SettingsWindowController {
     }
 
     private func makeWindow() -> NSWindow {
-        let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(settings: settings, onResetPersonalization: onResetPersonalization)))
+        let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(settings: settings, onResetPersonalization: onResetPersonalization, onPurgeMemory: onPurgeMemory)))
         window.title = "Ambient Screen Intelligence Settings"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
