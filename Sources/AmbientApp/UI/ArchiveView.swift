@@ -102,7 +102,7 @@ struct ArchiveView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(Self.timeFormatter.string(from: entry.timestamp))
                     .foregroundStyle(SpyTheme.textSecondary)
-                Text(HUDCodename.route(source: entry.sourceLanguage, target: entry.targetLanguage))
+                Text(entry.kind == .explanation ? "TERM" : HUDCodename.route(source: entry.sourceLanguage, target: entry.targetLanguage))
                     .foregroundStyle(SpyTheme.accent)
                 Text((entry.application ?? "—").uppercased())
                     .foregroundStyle(SpyTheme.textSecondary.opacity(0.8))

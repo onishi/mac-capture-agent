@@ -54,6 +54,8 @@ struct SettingsView: View {
             Section("Intelligence") {
                 Toggle("Briefing notes (Apple Intelligence, on-device)", isOn: $settings.briefingEnabled)
                     .disabled(!briefingAvailable)
+                Toggle("Explain technical terms and judge borderline text", isOn: $settings.reasoningEnabled)
+                    .disabled(!briefingAvailable)
                 Text(briefingAvailable
                      ? "Adds a one-line note about what the text means for you. Runs entirely on this Mac."
                      : "Requires macOS 26 with Apple Intelligence turned on.")

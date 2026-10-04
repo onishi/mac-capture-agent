@@ -110,3 +110,23 @@ final class ReappearanceTests: XCTestCase {
         XCTAssertEqual(copy.previouslySeen, seen)
     }
 }
+
+final class TermExplanationSanitizerTests: XCTestCase {
+    func testDeclinedOrUselessOutputIsDropped() {
+        XCTAssertNil(TermExplanationSanitizer.sanitize(TermExplanation(shouldExplain: false, expansion: nil, summary: "x"), term: "RAG"))
+        XCTAssertNil(TermExplanationSanitizer.sanitize(TermExplanation(shouldExplain: true, expansion: nil, summary: "  "), term: "RAG"))
+        XCTAssertNil(TermExplanationSanitizer.sanitize(TermExplanation(shouldExplain: true, expansion: nil, summary: "RAG"), term: "RAG"))
+    }
+
+    func testCleansAndTruncates() throws {
+        let raw = TermExplanation(shouldExplain: true, expansion: " Retrieval-Augmented Generation ",
+                                  summary: "「外部情報を検索して\nLLM の回答に利用する手法」")
+        let cleaned = try XCTUnwrap(TermExplanationSanitizer.sanitize(raw, term: "RAG"))
+        XCTAssertEqual(cleaned.expansion, "Retrieval-Augmented Generation")
+        XCTAssertEqual(cleaned.summary, "外部情報を検索して LLM の回答に利用する手法")
+        let long = TermExplanation(shouldExplain: true, expansion: "rag", summary: String(repeating: "あ", count: 300))
+        let truncated = try XCTUnwrap(TermExplanationSanitizer.sanitize(long, term: "RAG"))
+        XCTAssertEqual(truncated.summary.count, TermExplanationSanitizer.maximumSummaryLength)
+        XCTAssertNil(truncated.expansion, "expansion equal to the term is dropped")
+    }
+}

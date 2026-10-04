@@ -29,7 +29,7 @@ ScreenCaptureKit ─▶ FrameBuffer ─▶ ChangeDetector ─▶ AnalysisSchedul
 | macOS | 15.0 Sequoia 以降（macOS 26 推奨） |
 | Xcode | 16.0 以降（Xcode 26 推奨） |
 | CPU | Apple Silicon 推奨（Intel でも動作する想定） |
-| 外部依存 | なし（Apple 純正 Framework のみ） |
+| 外部依存 | GRDB 7（SQLite）のみ。ほかは Apple 純正 Framework |
 
 使用 Framework: ScreenCaptureKit / Vision / NaturalLanguage / Translation / SwiftUI / AppKit / OSLog
 
@@ -125,6 +125,10 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **AI Router（ignore-first）**: ルールベースの `InterestScorer` で 0.0〜1.0 のスコアを付け、0.7 以上のものだけ表示。メニューバー領域の文字やコーディングアプリでは減点
 - **Cooldown**: 同じ内容は 5 分間再表示しない（OCR の揺れを吸収する正規化キー）
 - **HUD**: 透明・最前面・クリック透過の `NSPanel` + SwiftUI。fade in 300ms → 3〜6 秒表示 → fade out 400ms。画面右上に表示
+- **専門用語の解説（v0.5, Apple Intelligence）**: 略語（RAG・CRDT など）や長いカタカナ語を候補にし、説明する価値があるかと 2 行の説明を Foundation Models が判断・生成する（一般語・固有名詞は説明しない）。結果は 30 日キャッシュ。HUD の KNOWN か、3 回表示した用語は今後説明しない
+- **LLM ルーター（v0.5, Apple Intelligence）**: ルールで判断が割れる候補（スコア 0.5〜0.7）だけをオンデバイス LLM に「今出す価値があるか」判定させる。8 秒に 1 回まで
+- **再登場通知（v0.5）**: HUD に出した内容の固有名詞（NLTagger の人名・組織名・地名）や用語が 1 日以上前にも出ていたら `SEEN ▸ 3日前にも表示されています` を添える
+- **SQLite 保存（v0.5）**: Visual Memory を GRDB の SQLite（全文検索は日本語も部分一致する FTS5 trigram）に移行。v0.4 の JSON は初回起動時に自動で取り込んで削除
 - **HUD の More 操作（v0.5）**: HUD にポインタを 0.6 秒置くとカードだけがクリック可能になり、COPY / ARCHIVE（その翻訳で Archive を開く）/ NOT USEFUL / MUTE <言語> / ✕ を表示。ポインタを外すと 0.4 秒で元のクリック透過に戻る。キーボードの入力先は奪わない
 - **Personalization の重み（v0.5）**: 仕様の比率どおり、閉じる −1 / More を開く +2 / コピー・Archive・検索 +3 / Not Useful −4（単位 0.03、上限 ±0.3）
 - **Debug overlay（v0.5）**: 設定の Developer でオンにすると、変化領域・OCR 範囲・Router の候補とスコア・件数・各段の処理時間を画面に重ねる。認識テキストは出さない。Instruments の Points of Interest に `ocr` / `translate` 区間を記録。実機検証の手順は [docs/perf/CHECKLIST-v0.4.1.md](docs/perf/CHECKLIST-v0.4.1.md)
@@ -145,7 +149,7 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **Pause / Resume**: 5 分・30 分・無期限。停止中はキャプチャ自体を止める
 - **Privacy**: 除外アプリ（1Password などのパスワードマネージャー、メッセージ、写真）とパスワード系ウィンドウタイトルでは解析しない
 - **Performance Mode**: Battery / Balanced / Performance（キャプチャ 5/15/30fps、Vision 0.5/1/2fps）
-- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization、DecodeEffect、Briefing、VisualMemory、PauseSchedule、Diagnostics など 96 件
+- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization、DecodeEffect、Briefing、VisualMemory、PauseSchedule、Diagnostics、TermExtractor、IntelStore など 119 件（うちストア 11 件は macOS のみ）
 
 ## プロジェクト構成
 
@@ -210,7 +214,7 @@ Xcode プロジェクトは Xcode 16 の「同期フォルダ」を使ってい�
 
 - **Local First**: OCR・言語判定・翻訳・画像分類はすべて Mac 上で実行します
 - **保存しない**: 画面キャプチャはメモリ上でのみ扱い、ディスクに保存しません。前フレームは 320px の輝度サムネイルだけを保持します
-- **Visual Memory**: 記録するのは HUD に実際に表示したテキストと付随情報だけで、画像は一切保存しません。保存先はこの Mac のアプリ専用領域で、バックアップ対象外です。設定でオフにでき、いつでも全削除できます
+- **Visual Memory**: 記録するのは HUD に実際に表示したテキストと付随情報だけで、画像は一切保存しません。保存先はこの Mac のアプリ専用領域の SQLite データベースで、バックアップ対象外です。設定でオフにでき、いつでも全削除できます
 - **送信しない**: アプリはサンドボックス化されており、ネットワークの Entitlement を持ちません。Cloud AI は未実装で、将来導入する場合も明示的なオプトインとします
 - **除外**: パスワードマネージャー、メッセージ、写真などはキャプチャ画像から除去され、解析もされません。パスワード入力画面らしいウィンドウタイトルでも解析を止めます。除外アプリは設定画面で追加できます
 - **ログ**: OCR したテキストの本文はログに記録しません（件数・文字数・言語コードのみ）

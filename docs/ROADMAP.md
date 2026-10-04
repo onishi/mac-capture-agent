@@ -12,7 +12,7 @@
 | v0.2 | HUD を対象テキストの近くに表示、ポインタのあるディスプレイを追従、Personalization | ✅ CI 済 |
 | v0.3 | SF スパイ映画風 HUD、Apple Intelligence による一行補足（BRIEF） | ✅ CI 済 |
 | v0.4 | Visual Memory（表示した Intel の記録）、自然言語検索、Archive 画面（⌥⌘K） | ✅ CI 済 |
-| v0.5 (進行中) | M0 の準備（Debug overlay・Signpost・チェックリスト）、M1 のうち HUD の More 操作・Personalization の重み・明日まで停止 | ✅ CI 済 / 実機待ち |
+| v0.5 | M0 の準備（Debug overlay・Signpost・チェックリスト）と M1 全項目（SQLite/GRDB、More 操作、専門用語の解説、Knowledge Cache、固有名詞、再登場通知、LLM ルーター、明日まで停止） | ✅ CI 済 / 実機待ち |
 
 **最大のリスクは「実機で一度も動かしていない」こと。** 次の作業は機能追加ではなく実機検証（M0）とする。
 
@@ -189,7 +189,7 @@
 
 | ID | 論点 | 選択肢 | 推奨 | 期限 |
 | --- | --- | --- | --- | --- |
-| D-1 | SQLite の使い方 | (a) GRDB（SPM 依存を追加） (b) システムの SQLite C API を薄く包む | (a) GRDB。マイグレーションと FTS5 の扱いが確実で、仕様書の候補とも一致 | M1 開始時 |
+| D-1 | SQLite の使い方 | (a) GRDB（SPM 依存を追加） (b) システムの SQLite C API を薄く包む | **決定: (a) GRDB 7**（2026-10）。GRDB は Linux 非対応のため、ストアのテストは macOS の CI で実行 | 決定済み |
 | D-2 | クラウド AI の提供元 | Anthropic / OpenAI / その他、または複数を切替 | `AIProvider` で抽象化したまま、最初の 1 社は品質とコストで M4 開始時に比較して決める | M4 開始時 |
 | D-3 | 著名人の推定を入れるか | (a) 入れない (b) 公人のみ・オプトイン・クラウドのみ | 法令（生体情報）と提供元の規約を確認するまで (a)。確認後に (b) を再検討 | M4 開始時 |
 | D-4 | ネットワーク Entitlement の追加 | 追加する / オプトイン版を別ビルドにする | 1 つのビルドに追加し、`NetworkGate` でオプトインまで遮断 | M4 開始時 |

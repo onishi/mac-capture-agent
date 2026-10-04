@@ -219,7 +219,7 @@ final class OverlayWindowController {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(message.detail, forType: .string)
             deadline = max(deadline, Date().addingTimeInterval(1))
-        case .openArchive, .notUseful, .skipLanguage, .close:
+        case .openArchive, .notUseful, .skipLanguage, .markKnown, .close:
             hide()
         }
     }

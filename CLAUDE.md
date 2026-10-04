@@ -12,9 +12,10 @@ Ambient Screen Intelligence: macOS の画面を常時観察し、価値がある
 ## 構成
 
 - `Sources/AmbientCore` — 画面に依存しない純粋ロジック。Foundation のみ（CGRect を使うファイルは `#if canImport(CoreGraphics) import CoreGraphics #endif`）。Linux でもビルド可。
+- `Sources/AmbientStore` — SQLite（GRDB）の保存層。macOS 専用。Core を使うファイルは `#if canImport(AmbientCore) import AmbientCore #endif`（Xcode では同じモジュールになるため）。テストは `Tests/AmbientStoreTests`（macOS の `swift test` で実行、Linux ではスキップ）。
 - `Sources/AmbientApp` — macOS 専用（ScreenCaptureKit / Vision / AppKit / SwiftUI / Translation / Foundation Models）。
 - `Tests/AmbientCoreTests` — Core の XCTest。
-- `AmbientScreenIntelligence.xcodeproj` — Xcode 16 の同期フォルダ。上の 2 フォルダにファイルを置けば自動でアプリに含まれる。アプリ側のファイルは Core を `import` しない（同じモジュールにコンパイルされる）。
+- `AmbientScreenIntelligence.xcodeproj` — Xcode 16 の同期フォルダ。上の 3 フォルダ（Core / Store / App）にファイルを置けば自動でアプリに含まれる。アプリ側のファイルは Core を `import` しない（同じモジュールにコンパイルされる）。
 
 ## コマンド
 

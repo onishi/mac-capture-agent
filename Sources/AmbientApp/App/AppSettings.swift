@@ -18,6 +18,7 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         static let memory = "memoryEnabled"
         static let memoryRetention = "memoryRetentionDays"
         static let debugOverlay = "debugOverlay"
+        static let reasoning = "reasoningEnabled"
     }
 
     static let supportedTargetLanguages = ["ja", "en", "zh-Hans", "zh-Hant", "ko", "fr", "de", "es", "it", "pt"]
@@ -66,6 +67,10 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         didSet { defaults.set(memoryRetentionDays, forKey: Key.memoryRetention) }
     }
     static let retentionChoices = [1, 7, 30]
+    /// Term explanations and LLM judgement of borderline text (Apple Intelligence).
+    @Published var reasoningEnabled: Bool {
+        didSet { defaults.set(reasoningEnabled, forKey: Key.reasoning) }
+    }
     /// Developer overlay: regions, router scores and timings (never text).
     @Published var debugOverlay: Bool {
         didSet { defaults.set(debugOverlay, forKey: Key.debugOverlay) }
@@ -89,6 +94,7 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         let retention = defaults.integer(forKey: Key.memoryRetention)
         memoryRetentionDays = Self.retentionChoices.contains(retention) ? retention : 7
         debugOverlay = defaults.bool(forKey: Key.debugOverlay)
+        reasoningEnabled = defaults.object(forKey: Key.reasoning) as? Bool ?? true
     }
 
     // MARK: Personalization (aggregated weights only, never screen content)
@@ -121,7 +127,8 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
             privacyPolicy: PrivacyPolicy(excludedBundleIdentifiers: excludedBundleIdentifiers),
             briefingEnabled: briefingEnabled,
             memoryEnabled: memoryEnabled,
-            debugOverlay: debugOverlay
+            debugOverlay: debugOverlay,
+            reasoningEnabled: reasoningEnabled
         )
     }
 }

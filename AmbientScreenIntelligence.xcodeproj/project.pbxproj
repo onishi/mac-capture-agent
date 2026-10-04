@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A5C1000000000000000000C4 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = A5C1000000000000000000C6 /* GRDB */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		A5C1000000000000000000A1 /* AmbientScreenIntelligence.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AmbientScreenIntelligence.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A5C1000000000000000000A2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -17,6 +21,7 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A5C1000000000000000000B1 /* AmbientCore */ = {isa = PBXFileSystemSynchronizedRootGroup; path = AmbientCore; sourceTree = "<group>"; };
 		A5C1000000000000000000B2 /* AmbientApp */ = {isa = PBXFileSystemSynchronizedRootGroup; path = AmbientApp; sourceTree = "<group>"; };
+		A5C1000000000000000000B3 /* AmbientStore */ = {isa = PBXFileSystemSynchronizedRootGroup; path = AmbientStore; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -24,6 +29,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A5C1000000000000000000C4 /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -54,6 +60,7 @@
 			children = (
 				A5C1000000000000000000B2 /* AmbientApp */,
 				A5C1000000000000000000B1 /* AmbientCore */,
+				A5C1000000000000000000B3 /* AmbientStore */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -85,9 +92,11 @@
 			fileSystemSynchronizedGroups = (
 				A5C1000000000000000000B1 /* AmbientCore */,
 				A5C1000000000000000000B2 /* AmbientApp */,
+				A5C1000000000000000000B3 /* AmbientStore */,
 			);
 			name = AmbientScreenIntelligence;
 			packageProductDependencies = (
+				A5C1000000000000000000C6 /* GRDB */,
 			);
 			productName = AmbientScreenIntelligence;
 			productReference = A5C1000000000000000000A1 /* AmbientScreenIntelligence.app */;
@@ -118,6 +127,9 @@
 			);
 			mainGroup = A5C1000000000000000000D1;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A5C1000000000000000000C5 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A5C1000000000000000000D2 /* Products */;
 			projectDirPath = "";
@@ -275,6 +287,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A5C1000000000000000000C5 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A5C1000000000000000000C6 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A5C1000000000000000000C5 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A5C1000000000000000000E2 /* Project object */;
 }

@@ -31,7 +31,8 @@ final class AppController: ObservableObject {
     private let classifier = ImageClassifier()
     private let personalization: PersonalizationStore
     let briefingProvider = AppleIntelligenceBriefingProvider()
-    let memoryStore: FileVisualMemoryStore
+    let memoryStore: IntelStore
+    private let reasoner = AppleIntelligenceReasoner()
 
     private var pipelineTask: Task<Void, Never>?
     private var resumeTask: Task<Void, Never>?
@@ -48,7 +49,18 @@ final class AppController: ObservableObject {
         personalization = PersonalizationStore(model: settings.loadPersonalizationModel()) { [weak settings] model in
             DispatchQueue.main.async { settings?.savePersonalizationModel(model) }
         }
-        memoryStore = FileVisualMemoryStore(retentionDays: settings.memoryRetentionDays, userLanguage: settings.targetLanguage)
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("AmbientScreenIntelligence", isDirectory: true)
+        memoryStore = IntelStore(
+            url: directory?.appendingPathComponent("intel.sqlite"),
+            retentionDays: settings.memoryRetentionDays,
+            userLanguage: settings.targetLanguage,
+            embedding: NLTextEmbedding()
+        )
+        if let legacy = directory?.appendingPathComponent("visual-memory.json") {
+            let store = memoryStore
+            Task { await store.importLegacyJSON(at: legacy) }
+        }
         overlay.onHover = { [weak self] message in
             self?.recordFeedback(.openedDetails, for: message)
         }
@@ -217,6 +229,11 @@ final class AppController: ObservableObject {
         case .skipLanguage:
             lastMessage = message
             stopTranslatingLastLanguage()
+        case .markKnown:
+            let store = memoryStore
+            let term = message.title
+            Task { await store.markTermKnown(term) }
+            Log.app.info("Term marked as known")
         case .close:
             recordFeedback(.dismissedQuickly, for: message)
         }
@@ -335,7 +352,8 @@ final class AppController: ObservableObject {
             translator: AppleTranslationProvider(bridge: translationBridge),
             foreground: foreground,
             briefingProvider: briefingProvider,
-            memory: memoryStore,
+            store: memoryStore,
+            reasoner: reasoner,
             present: { event in
                 await MainActor.run { [weak self] in
                     switch event {

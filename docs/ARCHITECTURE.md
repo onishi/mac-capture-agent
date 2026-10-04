@@ -14,7 +14,7 @@
 | 言語 | NaturalLanguage（言語判定・文埋め込み・固有名詞抽出） | |
 | 翻訳 | Translation framework | macOS 26 は `TranslationSession` 直接、15 は SwiftUI ブリッジ |
 | ローカル LLM | Foundation Models（macOS 26 + Apple Intelligence） | 現在は BRIEF のみ |
-| 永続化 | 現状: JSON ファイル → 目標: SQLite（GRDB、ROADMAP D-1） | |
+| 永続化 | SQLite（GRDB 7、ROADMAP D-1 で決定） | `Sources/AmbientStore`。Linux 非対応のためテストは macOS CI |
 | ベクトル検索 | 現状: 全件コサイン類似度 → 目標: 1 万件規模まで同方式、それ以上は sqlite-vec / USearch | |
 | クラウド AI | `AIProvider` プロトコルで抽象化（未実装） | オプトイン |
 | CI | GitHub Actions: Linux でコアのテスト、macOS 15 / 26 でアプリのビルドとテスト | |
@@ -144,7 +144,7 @@ Foundation Models では `@Generable` の構造体で受け取り、JSON 文字�
 | --- | --- | --- |
 | 設定 | `UserDefaults` | 翻訳先言語、モード、除外アプリ、表示位置など |
 | Personalization | `UserDefaults`（JSON） | `action:…|lang:…|app:…` ごとの重み（−0.3〜+0.3） |
-| Visual Memory | `Application Support/AmbientScreenIntelligence/visual-memory.json` | `VisualMemoryIndex`（HUD に表示した Intel、最大 1,000 件、保持 1/7/30 日、バックアップ除外） |
+| Visual Memory・エンティティ・Knowledge Cache | `Application Support/AmbientScreenIntelligence/intel.sqlite`（v0.5〜、GRDB） | §5.2 のスキーマ v1（work_session / bookmark は M3 で追加）。HUD に表示した Intel のみ、保持 1/7/30 日、バックアップ除外。v0.4 の `visual-memory.json` は初回起動時に取り込んで削除 |
 | フレーム | メモリのみ | 保存しない |
 
 ### 5.2 目標スキーマ（SQLite, v0.5 で移行）

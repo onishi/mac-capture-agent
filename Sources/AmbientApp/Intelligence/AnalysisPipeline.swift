@@ -10,6 +10,8 @@ struct PipelineConfiguration: Sendable, Equatable {
     var privacyPolicy: PrivacyPolicy
     var briefingEnabled: Bool
     var memoryEnabled: Bool
+    /// Technical-term explanations and LLM judgement of borderline candidates (Apple Intelligence).
+    var reasoningEnabled: Bool = true
     /// Draw changed regions, OCR areas, router scores and timings on screen.
     var debugOverlay: Bool = false
 }
@@ -22,8 +24,8 @@ enum HUDEvent: Sendable {
     case diagnostics(PipelineDiagnostics, PipelineCounters)
 }
 
-/// How a routed translation ended, for counters and diagnostics.
-private enum TranslationOutcome {
+/// How a routed action ended, for counters and diagnostics.
+private enum IntelOutcome {
     case shown
     case cooldown
     case discarded
@@ -51,7 +53,10 @@ actor AnalysisPipeline {
     private let foreground: ForegroundContextProvider
     private let present: Presenter
     private let briefingProvider: (any BriefingProvider)?
-    private let memory: (any VisualMemoryStore)?
+    private let store: IntelStore
+    private let reasoner: (any TermExplaining & RouterJudging)?
+    /// On-device LLM calls (explanations, routing) are rate-limited.
+    private var llmLimiter = RateLimiter(minimumInterval: 8)
     private let briefingTimeout: Duration = .seconds(5)
 
     private var lastDetection: TimeInterval = 0
@@ -72,7 +77,8 @@ actor AnalysisPipeline {
         translator: any TranslationProvider,
         foreground: ForegroundContextProvider,
         briefingProvider: (any BriefingProvider)?,
-        memory: (any VisualMemoryStore)?,
+        store: IntelStore,
+        reasoner: (any TermExplaining & RouterJudging)?,
         present: @escaping Presenter
     ) {
         self.configuration = configuration
@@ -93,7 +99,8 @@ actor AnalysisPipeline {
         self.foreground = foreground
         self.present = present
         self.briefingProvider = configuration.briefingEnabled ? briefingProvider : nil
-        self.memory = configuration.memoryEnabled ? memory : nil
+        self.store = store
+        self.reasoner = configuration.reasoningEnabled ? reasoner : nil
     }
 
     /// Consumes frames until the stream finishes or the task is cancelled.
@@ -197,36 +204,58 @@ actor AnalysisPipeline {
         let routeStart = clock.now
         let decision = router.decide(context)
         diagnostics.timings["route"] = Self.milliseconds(clock.now - routeStart)
-        let action = decision.selected
+        var action = decision.selected
 
-        var outcome: TranslationOutcome?
-        if action.action == .ignore {
-            counters.ignored += 1
-        } else {
-            Log.pipeline.info("Routed action: \(action.action.rawValue, privacy: .public) importance \(action.importance, format: .fixed(precision: 2))")
-            switch action.action {
+        // Second stage: let the on-device LLM judge what the rules were unsure about.
+        if action.action == .ignore, let reasoner = activeReasoner,
+           let candidate = RouterEscalation.candidates(in: decision).first {
+            switch candidate.action {
+            case .explainTerm:
+                action = candidate   // the explainer decides whether it is worth it
             case .translate:
-                let translateStart = clock.now
-                let signpost = Log.signposter.beginInterval("translate", id: Log.signposter.makeSignpostID())
-                let result = await translate(action, app: app, windowTitle: windowTitle, timestamp: frame.timestamp)
-                Log.signposter.endInterval("translate", signpost)
-                diagnostics.timings["translate"] = Self.milliseconds(clock.now - translateStart)
-                outcome = result
-                switch result {
-                case .shown: counters.hudsShown += 1
-                case .cooldown: counters.suppressedByCooldown += 1
-                case .discarded: counters.ignored += 1
-                case .failed: counters.failures += 1
+                if llmLimiter.allow(now: frame.timestamp) {
+                    let llmStart = clock.now
+                    let show = (try? await reasoner.shouldShow(candidate, appName: app.appName, targetLanguage: configuration.targetLanguage)) ?? false
+                    diagnostics.timings["llm"] = Self.milliseconds(clock.now - llmStart)
+                    if show { action = RouterEscalation.apply(show: true, to: candidate) }
                 }
-            case .explainTerm, .identifyAnimal, .identifyPlant, .identifyLandmark, .identifyPerson, .ignore:
-                // Not implemented yet (the router keeps them below the show threshold).
+            case .identifyAnimal, .identifyPlant, .identifyLandmark, .identifyPerson, .ignore:
                 break
             }
         }
 
+        var outcome: IntelOutcome?
+        switch action.action {
+        case .ignore:
+            counters.ignored += 1
+        case .translate:
+            Log.pipeline.info("Routed action: translate importance \(action.importance, format: .fixed(precision: 2))")
+            let translateStart = clock.now
+            let signpost = Log.signposter.beginInterval("translate", id: Log.signposter.makeSignpostID())
+            outcome = await translate(action, app: app, windowTitle: windowTitle, timestamp: frame.timestamp)
+            Log.signposter.endInterval("translate", signpost)
+            diagnostics.timings["translate"] = Self.milliseconds(clock.now - translateStart)
+        case .explainTerm:
+            let explainStart = clock.now
+            let signpost = Log.signposter.beginInterval("explain", id: Log.signposter.makeSignpostID())
+            outcome = await explainTerm(action, app: app, windowTitle: windowTitle, timestamp: frame.timestamp)
+            Log.signposter.endInterval("explain", signpost)
+            diagnostics.timings["explain"] = Self.milliseconds(clock.now - explainStart)
+        case .identifyAnimal, .identifyPlant, .identifyLandmark, .identifyPerson:
+            // Not implemented yet (the router keeps them below the show threshold).
+            break
+        }
+        switch outcome {
+        case .shown: counters.hudsShown += 1
+        case .cooldown: counters.suppressedByCooldown += 1
+        case .discarded: counters.ignored += 1
+        case .failed: counters.failures += 1
+        case nil: break
+        }
+
         if configuration.debugOverlay {
             diagnostics.candidates = decision.candidates.map { candidate in
-                let isSelected = candidate == action
+                let isSelected = action.action != .ignore && candidate.action == action.action && candidate.payload == action.payload
                 return PipelineDiagnostics.Candidate(
                     action: candidate.action,
                     importance: candidate.importance,
@@ -262,7 +291,7 @@ actor AnalysisPipeline {
         return categories
     }
 
-    private func translate(_ action: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval) async -> TranslationOutcome {
+    private func translate(_ action: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval) async -> IntelOutcome {
         guard let text = action.payload else { return .discarded }
         let key = CooldownCache.key(action: action.action, payload: text)
         guard cooldown.checkAndRecord(key, now: timestamp) else {
@@ -283,7 +312,7 @@ actor AnalysisPipeline {
                 return .discarded
             }
             Log.translation.info("Translated \(source, privacy: .public) → \(self.configuration.targetLanguage, privacy: .public)")
-            let message = HUDMessage(
+            var message = HUDMessage(
                 kind: .translation,
                 title: Self.displayName(of: source, in: configuration.targetLanguage),
                 original: text,
@@ -298,20 +327,11 @@ actor AnalysisPipeline {
                 targetLanguage: configuration.targetLanguage,
                 confidence: action.confidence
             )
+            let entities = NLEntityExtractor.entities(in: text)
+            message = await withReappearance(message, entities: entities)
             let briefing = briefingProvider.flatMap { $0.isAvailable ? $0 : nil }
             await present(.show(message, briefingPending: briefing != nil))
-            await memory?.remember(VisualMemoryEntry(
-                id: message.id,
-                timestamp: message.capturedAt,
-                application: app.appName,
-                bundleIdentifier: app.bundleIdentifier,
-                windowTitle: windowTitle,
-                sourceLanguage: message.sourceLanguage,
-                targetLanguage: message.targetLanguage,
-                original: message.original,
-                translation: message.detail,
-                features: message.features
-            ))
+            await rememberIfEnabled(message, app: app, windowTitle: windowTitle, entities: entities)
             if let briefing {
                 requestBriefing(from: briefing, for: message, appName: app.appName)
             }
@@ -320,6 +340,90 @@ actor AnalysisPipeline {
             Log.translation.error("Translation failed: \(String(describing: error), privacy: .public)")
             return .failed
         }
+    }
+
+    private var activeReasoner: (any TermExplaining & RouterJudging)? {
+        guard let reasoner, reasoner.isAvailable else { return nil }
+        return reasoner
+    }
+
+    /// Explains a technical term: Knowledge Cache first, then the on-device LLM,
+    /// which may also decide the term is not worth explaining (cached too).
+    private func explainTerm(_ candidate: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval) async -> IntelOutcome {
+        guard let reasoner = activeReasoner, let term = candidate.payload else { return .discarded }
+        let canonical = EntityName.canonical(term)
+        if await store.shouldSkipTerm(canonical) { return .discarded }
+        let key = CooldownCache.key(action: .explainTerm, payload: canonical)
+        guard !cooldown.isCoolingDown(key, now: timestamp) else { return .cooldown }
+
+        let explanation: TermExplanation
+        if let cached = await store.knowledge(forTerm: canonical) {
+            guard cached.summary != TermExplanationSanitizer.declinedMarker else { return .discarded }
+            explanation = TermExplanation(shouldExplain: true, expansion: cached.detail, summary: cached.summary)
+        } else {
+            guard llmLimiter.allow(now: timestamp) else { return .discarded }
+            do {
+                let raw = try await reasoner.explain(term: term, context: candidate.context ?? term, targetLanguage: configuration.targetLanguage)
+                let cleaned = TermExplanationSanitizer.sanitize(raw, term: term)
+                await store.saveKnowledge(
+                    term: term,
+                    summary: cleaned?.summary ?? TermExplanationSanitizer.declinedMarker,
+                    detail: cleaned?.expansion,
+                    source: "foundation-models"
+                )
+                guard let cleaned else { return .discarded }
+                explanation = cleaned
+            } catch {
+                Log.pipeline.error("Term explanation failed: \(String(describing: error), privacy: .public)")
+                return .failed
+            }
+        }
+
+        cooldown.record(key, now: timestamp)
+        let termEntity = ExtractedEntity(type: .term, name: term)
+        var message = HUDMessage(
+            kind: .explanation,
+            title: term,
+            original: explanation.expansion ?? term,
+            detail: explanation.summary,
+            anchor: candidate.region,
+            features: PersonalizationFeatures(action: .explainTerm, language: nil, bundleIdentifier: app.bundleIdentifier),
+            sourceLanguage: nil,
+            targetLanguage: configuration.targetLanguage
+        )
+        message = await withReappearance(message, entities: [termEntity])
+        await present(.show(message, briefingPending: false))
+        await store.noteTermShown(term)
+        await rememberIfEnabled(message, app: app, windowTitle: windowTitle, entities: [termEntity])
+        Log.pipeline.info("Term explained (\(term.count) chars)")
+        return .shown
+    }
+
+    /// Attaches "seen N days ago" when any of the entities appeared before.
+    private func withReappearance(_ message: HUDMessage, entities: [ExtractedEntity]) async -> HUDMessage {
+        guard configuration.memoryEnabled, !entities.isEmpty else { return message }
+        let seen = await store.lastSeen(entities, before: message.capturedAt, excluding: message.id)
+        guard Reappearance.daysSince(seen, now: message.capturedAt) != nil else { return message }
+        return message.withPreviouslySeen(seen)
+    }
+
+    private func rememberIfEnabled(_ message: HUDMessage, app: ForegroundContextProvider.Snapshot, windowTitle: String?, entities: [ExtractedEntity]) async {
+        guard configuration.memoryEnabled else { return }
+        let isExplanation = message.kind == .explanation
+        await store.remember(VisualMemoryEntry(
+            id: message.id,
+            timestamp: message.capturedAt,
+            kind: isExplanation ? .explanation : .translation,
+            application: app.appName,
+            bundleIdentifier: app.bundleIdentifier,
+            windowTitle: windowTitle,
+            sourceLanguage: message.sourceLanguage,
+            targetLanguage: message.targetLanguage,
+            original: isExplanation && message.original != message.title ? "\(message.title) — \(message.original)" : message.original,
+            translation: message.detail,
+            features: message.features
+        ))
+        await store.recordEntities(entities, observationID: message.id)
     }
 
     /// Generates the briefing in the background so the pipeline keeps running.
@@ -332,7 +436,7 @@ actor AnalysisPipeline {
             appName: appName
         )
         let present = self.present
-        let memory = self.memory
+        let memory: IntelStore? = configuration.memoryEnabled ? store : nil
         let timeout = briefingTimeout
         Task.detached(priority: .utility) {
             let text: String? = await withTaskGroup(of: String?.self) { group in

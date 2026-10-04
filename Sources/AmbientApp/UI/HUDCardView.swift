@@ -36,6 +36,12 @@ struct HUDCardView: View {
                 if briefing != .none {
                     briefingRow
                 }
+                if let seen = reappearanceLabel {
+                    Text("SEEN ▸ \(seen)")
+                        .font(SpyTheme.mono(9.5, weight: .semibold))
+                        .tracking(0.8)
+                        .foregroundStyle(SpyTheme.textSecondary)
+                }
             }
             .padding(.horizontal, 14)
             .padding(.top, 10)
@@ -68,7 +74,9 @@ struct HUDCardView: View {
             actionButton("COPY", .copy)
             actionButton("ARCHIVE", .openArchive)
             actionButton("NOT USEFUL", .notUseful)
-            if let language = message.sourceLanguage {
+            if message.kind == .explanation {
+                actionButton("KNOWN", .markKnown)
+            } else if let language = message.sourceLanguage {
                 actionButton("MUTE \(LanguageCode.base(language).uppercased())", .skipLanguage)
             }
             Spacer(minLength: 0)
@@ -103,7 +111,7 @@ struct HUDCardView: View {
         HStack(spacing: 6) {
             Text("◢")
                 .foregroundStyle(SpyTheme.accent)
-            Text("INTERCEPT // LINGUISTIC")
+            Text(message.kind == .explanation ? "INTEL // TERMINOLOGY" : "INTERCEPT // LINGUISTIC")
                 .foregroundStyle(SpyTheme.accent.opacity(0.9))
             Spacer(minLength: 8)
             Circle()
@@ -127,7 +135,7 @@ struct HUDCardView: View {
         HStack(spacing: 10) {
             Text(HUDCodename.targetCode(for: message.id))
                 .foregroundStyle(SpyTheme.textSecondary)
-            Text(HUDCodename.route(source: message.sourceLanguage, target: message.targetLanguage))
+            Text(message.kind == .explanation ? "TERM" : HUDCodename.route(source: message.sourceLanguage, target: message.targetLanguage))
                 .foregroundStyle(SpyTheme.accent)
                 .padding(.horizontal, 5)
                 .padding(.vertical, 1)
@@ -170,6 +178,12 @@ struct HUDCardView: View {
                     .lineLimit(6)
                     .shadow(color: SpyTheme.accent.opacity(decodeProgress >= 1 ? 0.25 : 0.6), radius: 6)
             }
+    }
+
+    private var reappearanceLabel: String? {
+        guard let seen = message.previouslySeen,
+              let days = Reappearance.daysSince(seen, now: message.capturedAt) else { return nil }
+        return Reappearance.label(days: days, language: message.targetLanguage ?? "en")
     }
 
     private var briefingRow: some View {
@@ -243,6 +257,7 @@ enum HUDAction: Equatable {
     case openArchive
     case notUseful
     case skipLanguage
+    case markKnown
     case close
 
     var help: String {
@@ -251,6 +266,7 @@ enum HUDAction: Equatable {
         case .openArchive: return "Open in the archive"
         case .notUseful: return "Show less of this"
         case .skipLanguage: return "Never translate this language"
+        case .markKnown: return "I know this term — don't explain it again"
         case .close: return "Close"
         }
     }

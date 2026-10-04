@@ -46,7 +46,7 @@ macOS 上でユーザーが見ている画面を継続的に観察し、AI が�
 | P-2 | イベント駆動: キャプチャ → 差分 → 変化領域のみ解析 → ローカル判定 → 必要時のみ高性能 AI / Web | ✅（ローカル部分） |
 | P-3 | Local First。クラウドは必要時のみ、切り抜き領域だけを送る | ✅（クラウド未実装） |
 | P-4 | 通常時はほぼ何も表示しない。数秒で自然に消える。操作を邪魔しない | ✅ |
-| P-5 | 一度理解済みのものは繰り返し説明しない | 🟡 クールダウンと学習のみ |
+| P-5 | 一度理解済みのものは繰り返し説明しない | ✅ クールダウン・学習・既知用語（KNOWN / 3 回で停止） |
 | P-6 | 詳細は知りたいときだけ展開する | ✅ ホバーで More 操作 |
 | P-7 | 失敗時は何も表示しない（技術的エラーをユーザーに見せない） | ✅ |
 
@@ -82,9 +82,9 @@ macOS 上でユーザーが見ている画面を継続的に観察し、AI が�
 
 | ID | 要件 | 状態 | 備考 |
 | --- | --- | --- | --- |
-| EX-1 | 人名・会社名・製品名・地名・作品名の抽出 | ⬜ | `NLTagger`（nameType）で抽出可能 |
-| EX-2 | 専門用語・技術用語の解説（例: RAG） | ⬜ | Foundation Models＋Knowledge Cache |
-| EX-3 | 理解済みの用語は再説明しない | ⬜ | 「今後表示しない」と既知用語リスト |
+| EX-1 | 人名・会社名・製品名・地名・作品名の抽出 | 🟡 | `NLTagger` で人名・組織名・地名を抽出し `entity` に記録。製品名・作品名は未対応 |
+| EX-2 | 専門用語・技術用語の解説（例: RAG） | ✅ | 候補はルール（略語・長いカタカナ語）、可否と説明は Foundation Models、`knowledge` に 30 日キャッシュ（見送りもキャッシュ） |
+| EX-3 | 理解済みの用語は再説明しない | ✅ | HUD の KNOWN、または 3 回表示で停止 |
 
 ### 3.4 識別（動植物・ランドマーク・人物）
 
@@ -127,10 +127,10 @@ macOS 上でユーザーが見ている画面を継続的に観察し、AI が�
 | --- | --- | --- | --- |
 | VM-1 | 見たものを記憶（タイトル・URL・時刻・アプリ・テキスト・固有名詞・要約・Embedding） | 🟡 | 現在は **HUD に表示したものだけ** を記録。URL・固有名詞・要約は未対応 |
 | VM-2 | スクリーンショット画像は保存しない | ✅ | |
-| VM-3 | 再登場通知（「このサービスは 3 日前にも表示されています」） | ⬜ | |
+| VM-3 | 再登場通知（「このサービスは 3 日前にも表示されています」） | 🟡 | HUD に表示した Intel の固有名詞・用語が 1 日以上前にも出ていたら `SEEN ▸ 3日前にも表示されています`。HUD に出していない画面内容は対象外 |
 | VM-4 | 自然言語検索（「昨日見ていた青い車」） | 🟡 | 日付・言語の解釈＋キーワード＋意味検索。画像の内容（「青い車」）は未対応 |
 | VM-5 | 自動ブックマーク（長時間閲覧・再訪・スクロール速度・マウス滞在・コピー・関連検索） | ⬜ | |
-| VM-6 | 画面履歴イベントの保存（timestamp / application / windowTitle / url / entities / summary / embedding） | 🟡 | JSON ファイル。SQLite へ移行予定 |
+| VM-6 | 画面履歴イベントの保存（timestamp / application / windowTitle / url / entities / summary / embedding） | 🟡 | SQLite（GRDB）。URL・要約は未対応 |
 
 ### 3.9 コンテキストと注目
 
@@ -149,7 +149,7 @@ macOS 上でユーザーが見ている画面を継続的に観察し、AI が�
 | RT-2 | アクション: translate / identify_person / identify_animal / identify_plant / identify_landmark / explain_term / explain_error / identify_product / ignore | 🟡 | explain_error・identify_product は未定義 |
 | RT-3 | ignore を優先、当たり前の情報を避ける | ✅ | |
 | RT-4 | 出力は構造化（action / confidence / importance / region） | ✅ | `RoutedAction` |
-| RT-5 | LLM ベースのルーター（§10 のプロンプト） | ⬜ | Foundation Models で実装予定 |
+| RT-5 | LLM ベースのルーター（§10 のプロンプト） | ✅ | スコア 0.5〜0.7 の候補だけを Foundation Models（`@Generable`）で判定。8 秒に 1 回まで |
 
 ### 3.11 HUD
 
