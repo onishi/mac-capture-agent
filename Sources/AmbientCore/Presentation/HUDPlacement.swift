@@ -112,3 +112,17 @@ public enum HUDGeometry {
         CGRect(x: rect.minX - screenFrame.minX, y: screenFrame.maxY - rect.maxY, width: rect.width, height: rect.height)
     }
 }
+
+public extension HUDPlacement {
+    /// Grows `frame` (AppKit coordinates) by `extraHeight` while keeping its top
+    /// edge fixed, so the card doesn't move under the pointer when its actions
+    /// appear. Shifts up only as much as needed to stay inside `visibleFrame`.
+    func grow(_ frame: CGRect, byHeight extraHeight: CGFloat, within visibleFrame: CGRect) -> CGRect {
+        var grown = CGRect(x: frame.minX, y: frame.minY - extraHeight, width: frame.width, height: frame.height + extraHeight)
+        let bottom = visibleFrame.minY + margin
+        if grown.minY < bottom {
+            grown.origin.y = Swift.min(bottom, visibleFrame.maxY - grown.height)
+        }
+        return grown
+    }
+}

@@ -1,11 +1,12 @@
 import SwiftUI
 
 /// Full-screen, click-through overlay: target lock-on reticle around the
-/// source text, a leader line, and the intel card.
+/// source text and the leader line to the card. The card itself lives in its
+/// own small panel (`HUDCardHostView`) so it can accept clicks on hover.
 ///
 /// Every animation is a pure function of the time since the message appeared,
 /// so state changes never leave an animation half-finished.
-struct SpyHUDView: View {
+struct SpyTargetingView: View {
     @ObservedObject var state: HUDState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -18,7 +19,6 @@ struct SpyHUDView: View {
                         reticle(target: target, message: message, elapsed: elapsed)
                         leader(target: target, elapsed: elapsed)
                     }
-                    card(message: message, elapsed: elapsed, now: timeline.date)
                 }
             }
             .frame(width: state.canvasSize.width, height: state.canvasSize.height, alignment: .topLeading)
@@ -88,33 +88,16 @@ struct SpyHUDView: View {
         }
     }
 
-    // MARK: Card
-
-    private func card(message: HUDMessage, elapsed: TimeInterval, now: Date) -> some View {
-        let unfold = ease(elapsed, start: state.targetRect == nil ? 0 : 0.3, duration: 0.25)
-        let decodeStart = (state.targetRect == nil ? 0.15 : 0.45)
-        let decode = reduceMotion ? 1 : DecodeEffect.progress(elapsed: elapsed - decodeStart, duration: 0.7)
-        let sweepProgress = (elapsed - decodeStart) / 0.9
-        let caret = Int(now.timeIntervalSinceReferenceDate * 2.5) % 2 == 0
-
-        return HUDCardView(
-            message: message,
-            briefing: state.briefing,
-            decodeProgress: decode,
-            tick: Int(elapsed * 24),
-            caretVisible: caret,
-            sweep: (0...1).contains(sweepProgress) && !reduceMotion ? sweepProgress : nil
-        )
-        .frame(width: state.cardRect.width, alignment: .topLeading)
-        .scaleEffect(x: 1, y: max(0.04, unfold), anchor: .top)
-        .opacity(min(1, unfold * 1.5))
-        .offset(x: state.cardRect.minX, y: state.cardRect.minY)
-    }
-
     // MARK: Helpers
 
-    /// Ease-out progress (0...1) of an animation starting at `start` lasting `duration`.
     private func ease(_ elapsed: TimeInterval, start: TimeInterval, duration: TimeInterval) -> Double {
+        HUDAnimation.ease(elapsed, start: start, duration: duration)
+    }
+}
+
+enum HUDAnimation {
+    /// Ease-out progress (0...1) of an animation starting at `start` lasting `duration`.
+    static func ease(_ elapsed: TimeInterval, start: TimeInterval, duration: TimeInterval) -> Double {
         guard duration > 0 else { return 1 }
         let t = min(max((elapsed - start) / duration, 0), 1)
         return 1 - pow(1 - t, 3)

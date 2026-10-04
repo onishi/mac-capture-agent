@@ -10,12 +10,24 @@ struct PipelineConfiguration: Sendable, Equatable {
     var privacyPolicy: PrivacyPolicy
     var briefingEnabled: Bool
     var memoryEnabled: Bool
+    /// Draw changed regions, OCR areas, router scores and timings on screen.
+    var debugOverlay: Bool = false
 }
 
 /// What the pipeline asks the HUD to do.
 enum HUDEvent: Sendable {
     case show(HUDMessage, briefingPending: Bool)
     case briefing(messageID: UUID, text: String?)
+    /// Debug overlay data (geometry, scores, timings — never text).
+    case diagnostics(PipelineDiagnostics, PipelineCounters)
+}
+
+/// How a routed translation ended, for counters and diagnostics.
+private enum TranslationOutcome {
+    case shown
+    case cooldown
+    case discarded
+    case failed
 }
 
 /// ScreenCaptureKit frames → change detection → region OCR / classification
@@ -45,6 +57,8 @@ actor AnalysisPipeline {
     private var lastDetection: TimeInterval = 0
     private var lastClassification: TimeInterval = 0
     private var wasBlockedByPrivacy = false
+    private var counters = PipelineCounters()
+    private let clock = ContinuousClock()
 
     /// Normalized margins added around changed regions so partially changed lines are read completely.
     private let regionPadding = (dx: CGFloat(0.04), dy: CGFloat(0.01))
@@ -117,28 +131,61 @@ actor AnalysisPipeline {
         // screen at launch is not announced.
         guard let previous = await frameBuffer.push(current) else { return }
 
+        counters.framesChecked += 1
+        let detectStart = clock.now
         let regions = changeDetector.detect(previous: previous, current: gray)
+        let detectMilliseconds = Self.milliseconds(clock.now - detectStart)
         if !regions.isEmpty {
+            counters.changesDetected += 1
             Log.pipeline.debug("Change detected: \(regions.count) region(s)")
         }
-        guard let toAnalyze = scheduler.ingest(regions, at: frame.timestamp) else { return }
-        await analyze(toAnalyze, in: current, app: app)
+        guard let toAnalyze = scheduler.ingest(regions, at: frame.timestamp) else {
+            if configuration.debugOverlay, !regions.isEmpty {
+                var diagnostics = PipelineDiagnostics()
+                diagnostics.changedRegions = regions.map(\.rect)
+                diagnostics.timings["detect"] = detectMilliseconds
+                await present(.diagnostics(diagnostics, counters))
+            }
+            return
+        }
+        var diagnostics = PipelineDiagnostics()
+        diagnostics.changedRegions = regions.map(\.rect)
+        diagnostics.timings["detect"] = detectMilliseconds
+        await analyze(toAnalyze, in: current, app: app, diagnostics: diagnostics)
     }
 
-    private func analyze(_ regions: [ChangedRegion], in frame: AnalyzableFrame, app: ForegroundContextProvider.Snapshot) async {
+    private func analyze(
+        _ regions: [ChangedRegion],
+        in frame: AnalyzableFrame,
+        app: ForegroundContextProvider.Snapshot,
+        diagnostics initialDiagnostics: PipelineDiagnostics
+    ) async {
+        var diagnostics = initialDiagnostics
         let windowTitle = foreground.windowTitle(for: app.processIdentifier)
         guard privacy.allowsAnalysis(of: app, windowTitle: windowTitle) else {
             await pauseForPrivacy()
             return
         }
 
+        counters.analyses += 1
         let padded = regions.map { $0.expanded(dx: regionPadding.dx, dy: regionPadding.dy) }
         Log.vision.debug("OCR started: \(padded.count) region(s)")
+        let ocrStart = clock.now
+        let ocrSignpost = Log.signposter.beginInterval("ocr", id: Log.signposter.makeSignpostID())
         let lines = await ocr.recognizeText(in: frame.pixelBuffer, regions: padded)
         let blocks = TextBlockGrouper().group(lines)
+        Log.signposter.endInterval("ocr", ocrSignpost)
+        diagnostics.timings["ocr"] = Self.milliseconds(clock.now - ocrStart)
+        diagnostics.analyzedRegions = padded.map(\.rect)
+        diagnostics.textLineCount = lines.count
+        diagnostics.textBlockCount = blocks.count
         Log.vision.debug("OCR finished: \(lines.count) line(s), \(blocks.count) block(s)")
 
+        let classifyStart = clock.now
         let categories = await classifyIfUseful(regions: padded, textBlocks: blocks, frame: frame)
+        if !categories.isEmpty {
+            diagnostics.timings["classify"] = Self.milliseconds(clock.now - classifyStart)
+        }
 
         let context = AnalysisContext(
             appName: app.appName,
@@ -147,17 +194,54 @@ actor AnalysisPipeline {
             textRegions: blocks,
             visualCategories: categories
         )
-        let action = router.route(context)
-        guard action.action != .ignore else { return }
-        Log.pipeline.info("Routed action: \(action.action.rawValue, privacy: .public) importance \(action.importance, format: .fixed(precision: 2))")
+        let routeStart = clock.now
+        let decision = router.decide(context)
+        diagnostics.timings["route"] = Self.milliseconds(clock.now - routeStart)
+        let action = decision.selected
 
-        switch action.action {
-        case .translate:
-            await translate(action, app: app, windowTitle: windowTitle, timestamp: frame.timestamp)
-        case .explainTerm, .identifyAnimal, .identifyPlant, .identifyLandmark, .identifyPerson, .ignore:
-            // Not implemented in v0.1 (the router keeps them below the show threshold).
-            break
+        var outcome: TranslationOutcome?
+        if action.action == .ignore {
+            counters.ignored += 1
+        } else {
+            Log.pipeline.info("Routed action: \(action.action.rawValue, privacy: .public) importance \(action.importance, format: .fixed(precision: 2))")
+            switch action.action {
+            case .translate:
+                let translateStart = clock.now
+                let signpost = Log.signposter.beginInterval("translate", id: Log.signposter.makeSignpostID())
+                let result = await translate(action, app: app, windowTitle: windowTitle, timestamp: frame.timestamp)
+                Log.signposter.endInterval("translate", signpost)
+                diagnostics.timings["translate"] = Self.milliseconds(clock.now - translateStart)
+                outcome = result
+                switch result {
+                case .shown: counters.hudsShown += 1
+                case .cooldown: counters.suppressedByCooldown += 1
+                case .discarded: counters.ignored += 1
+                case .failed: counters.failures += 1
+                }
+            case .explainTerm, .identifyAnimal, .identifyPlant, .identifyLandmark, .identifyPerson, .ignore:
+                // Not implemented yet (the router keeps them below the show threshold).
+                break
+            }
         }
+
+        if configuration.debugOverlay {
+            diagnostics.candidates = decision.candidates.map { candidate in
+                let isSelected = candidate == action
+                return PipelineDiagnostics.Candidate(
+                    action: candidate.action,
+                    importance: candidate.importance,
+                    region: candidate.region,
+                    selected: isSelected,
+                    suppressedByCooldown: isSelected && outcome == .cooldown
+                )
+            }
+            await present(.diagnostics(diagnostics, counters))
+        }
+    }
+
+    private static func milliseconds(_ duration: Duration) -> Double {
+        let components = duration.components
+        return Double(components.seconds) * 1_000 + Double(components.attoseconds) / 1e15
     }
 
     private func classifyIfUseful(regions: [ChangedRegion], textBlocks: [RecognizedTextRegion], frame: AnalyzableFrame) async -> [VisualCategory] {
@@ -178,12 +262,12 @@ actor AnalysisPipeline {
         return categories
     }
 
-    private func translate(_ action: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval) async {
-        guard let text = action.payload else { return }
+    private func translate(_ action: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval) async -> TranslationOutcome {
+        guard let text = action.payload else { return .discarded }
         let key = CooldownCache.key(action: action.action, payload: text)
         guard cooldown.checkAndRecord(key, now: timestamp) else {
             Log.pipeline.debug("Suppressed by cooldown")
-            return
+            return .cooldown
         }
         let source = action.sourceLanguage ?? "und"
         Log.translation.info("Foreign language detected: \(source, privacy: .public), \(text.count) chars")
@@ -196,7 +280,7 @@ actor AnalysisPipeline {
             )
             guard TranslationResultValidator.isUseful(original: text, translated: translated) else {
                 Log.translation.debug("Translation discarded (empty or identical)")
-                return
+                return .discarded
             }
             Log.translation.info("Translated \(source, privacy: .public) → \(self.configuration.targetLanguage, privacy: .public)")
             let message = HUDMessage(
@@ -231,8 +315,10 @@ actor AnalysisPipeline {
             if let briefing {
                 requestBriefing(from: briefing, for: message, appName: app.appName)
             }
+            return .shown
         } catch {
             Log.translation.error("Translation failed: \(String(describing: error), privacy: .public)")
+            return .failed
         }
     }
 

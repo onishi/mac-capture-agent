@@ -30,6 +30,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onOpen: { [weak controller] entry in controller?.recordSearch(for: entry) }
         ))
         self.archiveWindow = archiveWindow
+        controller.openArchive = { [weak archiveWindow] query in
+            archiveWindow?.show(query: query)
+        }
         menuBar = MenuBarController(
             controller: controller,
             openSettings: { [weak settingsWindow] in settingsWindow?.show() },

@@ -12,6 +12,7 @@
 | v0.2 | HUD を対象テキストの近くに表示、ポインタのあるディスプレイを追従、Personalization | ✅ CI 済 |
 | v0.3 | SF スパイ映画風 HUD、Apple Intelligence による一行補足（BRIEF） | ✅ CI 済 |
 | v0.4 | Visual Memory（表示した Intel の記録）、自然言語検索、Archive 画面（⌥⌘K） | ✅ CI 済 |
+| v0.5 (進行中) | M0 の準備（Debug overlay・Signpost・チェックリスト）、M1 のうち HUD の More 操作・Personalization の重み・明日まで停止 | ✅ CI 済 / 実機待ち |
 
 **最大のリスクは「実機で一度も動かしていない」こと。** 次の作業は機能追加ではなく実機検証（M0）とする。
 

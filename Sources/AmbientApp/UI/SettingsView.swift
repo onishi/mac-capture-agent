@@ -115,6 +115,13 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Developer") {
+                Toggle("Debug overlay", isOn: $settings.debugOverlay)
+                Text("Draws changed regions, OCR areas, router scores, counters and timings on screen. Never shows recognized text.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Privacy") {
                 Text("Screen content is processed in memory on this Mac only. Nothing is saved to disk or sent over the network.")
                     .font(.caption)

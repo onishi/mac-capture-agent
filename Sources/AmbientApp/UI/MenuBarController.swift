@@ -55,6 +55,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(item("Pause 5 Minutes", #selector(pauseFiveMinutes), enabled: canPause))
         menu.addItem(item("Pause 30 Minutes", #selector(pauseThirtyMinutes), enabled: canPause))
+        menu.addItem(item("Pause Until Tomorrow", #selector(pauseUntilTomorrow), enabled: canPause))
         menu.addItem(item("Pause", #selector(pauseIndefinitely), enabled: canPause))
         menu.addItem(item("Resume", #selector(resume), enabled: isPaused || status == .idle || Self.isFailed(status)))
 
@@ -90,6 +91,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     @objc private func pauseFiveMinutes() { controller.pause(for: 5 * 60) }
     @objc private func pauseThirtyMinutes() { controller.pause(for: 30 * 60) }
+    @objc private func pauseUntilTomorrow() { controller.pauseUntilTomorrow() }
     @objc private func pauseIndefinitely() { controller.pause(for: nil) }
     @objc private func resume() { Task { await controller.resume() } }
     @objc private func showArchive() { openArchive() }
@@ -138,7 +140,9 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         case .idle: return "Stopped"
         case .starting: return "Starting…"
         case .running: return "Running"
-        case .paused(let until?): return "Paused until \(timeFormatter.string(from: until))"
+        case .paused(let until?):
+            let day = Calendar.current.isDateInToday(until) ? "" : (Calendar.current.isDateInTomorrow(until) ? "tomorrow " : "")
+            return "Paused until \(day)\(timeFormatter.string(from: until))"
         case .paused(nil): return "Paused"
         case .needsPermission: return "Screen Recording permission required"
         case .failed(let reason): return "Error: \(reason)"

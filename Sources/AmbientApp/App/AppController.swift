@@ -21,6 +21,9 @@ final class AppController: ObservableObject {
     let settings: AppSettings
     private let capture = ScreenCaptureManager()
     private let overlay = OverlayWindowController()
+    private let debugOverlay = DebugOverlayController()
+    /// Opens the archive with a query (set by the app delegate).
+    var openArchive: ((String) -> Void)?
     private let translationBridge = TranslationBridge()
     private let translationHost: TranslationHostWindow
     private let foreground = ForegroundContextProvider()
@@ -48,6 +51,9 @@ final class AppController: ObservableObject {
         memoryStore = FileVisualMemoryStore(retentionDays: settings.memoryRetentionDays, userLanguage: settings.targetLanguage)
         overlay.onHover = { [weak self] message in
             self?.recordFeedback(.openedDetails, for: message)
+        }
+        overlay.onAction = { [weak self] action, message in
+            self?.handleHUDAction(action, for: message)
         }
         settingsObservation = settings.objectWillChange
             .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
@@ -111,15 +117,25 @@ final class AppController: ObservableObject {
 
     /// Stops capture and analysis. `duration == nil` pauses until resumed manually.
     func pause(for duration: TimeInterval?) {
-        let until = duration.map { Date().addingTimeInterval($0) }
-        status = .paused(until: until)
+        pause(until: duration.map { Date().addingTimeInterval($0) })
+    }
+
+    /// Pauses until the next morning (see `PauseSchedule`).
+    func pauseUntilTomorrow() {
+        pause(until: PauseSchedule.untilTomorrow(from: Date()))
+    }
+
+    /// Stops capture and analysis until `date` (`nil` = until resumed manually).
+    func pause(until date: Date?) {
+        status = .paused(until: date)
         stopPipeline()
         overlay.hide()
         resumeTask?.cancel()
         resumeTask = nil
-        if let duration {
+        if let date {
             resumeTask = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(duration))
+                let delay = max(0, date.timeIntervalSinceNow)
+                try? await Task.sleep(for: .seconds(delay))
                 guard !Task.isCancelled else { return }
                 await self?.resume()
             }
@@ -181,10 +197,29 @@ final class AppController: ObservableObject {
     /// "Not useful": strongly lowers the score of similar content.
     func markLastMessageNotUseful() {
         guard let message = lastMessage else { return }
-        recordFeedback(.dismissedQuickly, for: message)
-        recordFeedback(.dismissedQuickly, for: message)
+        recordFeedback(.markedNotUseful, for: message)
         overlay.hide()
         lastMessage = nil
+    }
+
+    /// The HUD's More actions.
+    private func handleHUDAction(_ action: HUDAction, for message: HUDMessage) {
+        switch action {
+        case .copy:
+            // Taking the information away is the strongest signal of interest.
+            recordFeedback(.searched, for: message)
+        case .openArchive:
+            recordFeedback(.searched, for: message)
+            openArchive?(message.detail)
+        case .notUseful:
+            lastMessage = message
+            markLastMessageNotUseful()
+        case .skipLanguage:
+            lastMessage = message
+            stopTranslatingLastLanguage()
+        case .close:
+            recordFeedback(.dismissedQuickly, for: message)
+        }
     }
 
     /// Never translate the language of the last message again.
@@ -238,6 +273,7 @@ final class AppController: ObservableObject {
         pipelineTask = nil
         runningConfiguration = nil
         runningDisplayID = nil
+        debugOverlay.hide()
         displayFollowTask?.cancel()
         displayFollowTask = nil
         let capture = self.capture
@@ -313,6 +349,8 @@ final class AppController: ObservableObject {
                         )
                     case .briefing(let messageID, let text):
                         overlay.updateBriefing(text, for: messageID)
+                    case .diagnostics(let diagnostics, let counters):
+                        self?.debugOverlay.update(diagnostics, counters: counters, on: NSScreen.screen(for: displayID))
                     }
                 }
             }

@@ -1,19 +1,27 @@
 import Foundation
 
 /// User reactions used to tune what gets shown.
+///
+/// Weights follow the spec's ratio (close −1 / More +2 / search +3) on a
+/// unit of 0.03, plus an explicit "Not useful" that counts as −4.
 public enum PersonalizationFeedback: String, Sendable, Equatable, Codable {
-    /// HUD dismissed right away / marked as not useful → score −
+    /// HUD closed with ✕ → −1
     case dismissedQuickly
-    /// User looked at the details (hovered the HUD) → score +
+    /// The More actions were opened (hovered long enough) → +2
     case openedDetails
-    /// User searched for the item → score ++
+    /// User searched for / reopened the item → +3
     case searched
+    /// User explicitly said "Not useful" → −4
+    case markedNotUseful
+
+    public static let unit = 0.03
 
     var delta: Double {
         switch self {
-        case .dismissedQuickly: return -0.08
-        case .openedDetails: return 0.03
-        case .searched: return 0.08
+        case .dismissedQuickly: return -1 * Self.unit
+        case .openedDetails: return 2 * Self.unit
+        case .searched: return 3 * Self.unit
+        case .markedNotUseful: return -4 * Self.unit
         }
     }
 }

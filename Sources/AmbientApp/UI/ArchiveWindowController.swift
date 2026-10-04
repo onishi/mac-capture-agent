@@ -18,7 +18,8 @@ final class ArchiveWindowController {
         }
     }
 
-    func show() {
+    func show(query: String? = nil) {
+        if let query { model.query = query }
         let window = self.window ?? makeWindow()
         self.window = window
         model.refresh()

@@ -9,9 +9,22 @@ final class PersonalizationTests: XCTestCase {
         var model = PersonalizationModel()
         model.record(.openedDetails, for: french)
         XCTAssertGreaterThan(model.adjustment(for: french), 0)
-        model.record(.dismissedQuickly, for: french)
-        model.record(.dismissedQuickly, for: french)
+        model.record(.markedNotUseful, for: french)
         XCTAssertLessThan(model.adjustment(for: french), 0)
+    }
+
+    func testWeightsFollowSpecRatio() {
+        // close −1 / More +2 / search +3 (and an explicit "Not useful" −4)
+        let features = PersonalizationFeatures(action: .translate, language: nil, bundleIdentifier: nil)
+        func delta(_ feedback: PersonalizationFeedback) -> Double {
+            var model = PersonalizationModel()
+            model.record(feedback, for: features)
+            return model.adjustment(for: features) / (PersonalizationFeedback.unit * 0.25)
+        }
+        XCTAssertEqual(delta(.dismissedQuickly), -1, accuracy: 0.0001)
+        XCTAssertEqual(delta(.openedDetails), 2, accuracy: 0.0001)
+        XCTAssertEqual(delta(.searched), 3, accuracy: 0.0001)
+        XCTAssertEqual(delta(.markedNotUseful), -4, accuracy: 0.0001)
     }
 
     func testSearchedWeighsMoreThanOpened() {
@@ -56,7 +69,7 @@ final class PersonalizationTests: XCTestCase {
         let ctx = context([textRegion(sentence)])
         let before = router.route(ctx)
         XCTAssertEqual(before.action, .translate)
-        for _ in 0..<4 { store.record(.dismissedQuickly, for: french) }
+        for _ in 0..<2 { store.record(.markedNotUseful, for: french) }
         XCTAssertLessThan(router.candidates(for: ctx).first?.importance ?? 1, before.importance)
         XCTAssertEqual(router.route(ctx), .ignore, "repeatedly rejected content stops being shown")
         store.reset()

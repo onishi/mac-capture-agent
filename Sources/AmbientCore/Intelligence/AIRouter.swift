@@ -21,7 +21,14 @@ public final class AIRouter: Sendable {
 
     /// The single best action for this context, or `.ignore`.
     public func route(_ context: AnalysisContext) -> RoutedAction {
-        candidates(for: context).first { $0.interestScore.level == .show } ?? .ignore
+        decide(context).selected
+    }
+
+    /// The selected action together with every scored candidate (for diagnostics).
+    public func decide(_ context: AnalysisContext) -> RouterDecision {
+        let candidates = candidates(for: context)
+        let selected = candidates.first { $0.interestScore.level == .show } ?? .ignore
+        return RouterDecision(selected: selected, candidates: candidates)
     }
 
     /// All scored candidates, most important first (useful for debugging and tests).
@@ -62,4 +69,10 @@ public final class AIRouter: Sendable {
         case .food, .text, .unknown: return nil
         }
     }
+}
+
+public struct RouterDecision: Sendable, Equatable {
+    public let selected: RoutedAction
+    /// Most important first.
+    public let candidates: [RoutedAction]
 }

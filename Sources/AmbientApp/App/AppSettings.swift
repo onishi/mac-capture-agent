@@ -17,6 +17,7 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         static let briefing = "briefingEnabled"
         static let memory = "memoryEnabled"
         static let memoryRetention = "memoryRetentionDays"
+        static let debugOverlay = "debugOverlay"
     }
 
     static let supportedTargetLanguages = ["ja", "en", "zh-Hans", "zh-Hant", "ko", "fr", "de", "es", "it", "pt"]
@@ -65,6 +66,10 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         didSet { defaults.set(memoryRetentionDays, forKey: Key.memoryRetention) }
     }
     static let retentionChoices = [1, 7, 30]
+    /// Developer overlay: regions, router scores and timings (never text).
+    @Published var debugOverlay: Bool {
+        didSet { defaults.set(debugOverlay, forKey: Key.debugOverlay) }
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -83,6 +88,7 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         memoryEnabled = defaults.object(forKey: Key.memory) as? Bool ?? true
         let retention = defaults.integer(forKey: Key.memoryRetention)
         memoryRetentionDays = Self.retentionChoices.contains(retention) ? retention : 7
+        debugOverlay = defaults.bool(forKey: Key.debugOverlay)
     }
 
     // MARK: Personalization (aggregated weights only, never screen content)
@@ -114,7 +120,8 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
             imageClassificationEnabled: imageClassificationEnabled,
             privacyPolicy: PrivacyPolicy(excludedBundleIdentifiers: excludedBundleIdentifiers),
             briefingEnabled: briefingEnabled,
-            memoryEnabled: memoryEnabled
+            memoryEnabled: memoryEnabled,
+            debugOverlay: debugOverlay
         )
     }
 }

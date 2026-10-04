@@ -13,4 +13,7 @@ enum Log {
     static let translation = Logger(subsystem: subsystem, category: "translation")
     static let hud = Logger(subsystem: subsystem, category: "hud")
     static let privacy = Logger(subsystem: subsystem, category: "privacy")
+
+    /// Intervals for Instruments (Points of Interest): ocr, translate.
+    static let signposter = OSSignposter(subsystem: subsystem, category: .pointsOfInterest)
 }

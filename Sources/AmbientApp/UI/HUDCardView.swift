@@ -11,6 +11,9 @@ struct HUDCardView: View {
     var caretVisible: Bool = true
     /// 0...1 position of the scan sweep, nil when finished.
     var sweep: Double?
+    /// Shows the More actions (only while the card is interactive).
+    var showsActions = false
+    var onAction: ((HUDAction) -> Void)?
 
     private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -37,6 +40,9 @@ struct HUDCardView: View {
             .padding(.horizontal, 14)
             .padding(.top, 10)
             .padding(.bottom, 13)
+            if showsActions {
+                actionBar
+            }
         }
         .frame(width: SpyTheme.cardWidth, alignment: .leading)
         .background(background)
@@ -55,6 +61,42 @@ struct HUDCardView: View {
         .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(message.title): \(message.detail)")
+    }
+
+    private var actionBar: some View {
+        HStack(spacing: 6) {
+            actionButton("COPY", .copy)
+            actionButton("ARCHIVE", .openArchive)
+            actionButton("NOT USEFUL", .notUseful)
+            if let language = message.sourceLanguage {
+                actionButton("MUTE \(LanguageCode.base(language).uppercased())", .skipLanguage)
+            }
+            Spacer(minLength: 0)
+            actionButton("✕", .close)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(SpyTheme.accent.opacity(0.07))
+        .overlay(alignment: .top) {
+            Rectangle().fill(SpyTheme.accentDim).frame(height: 0.75)
+        }
+    }
+
+    private func actionButton(_ title: String, _ action: HUDAction) -> some View {
+        Button {
+            onAction?(action)
+        } label: {
+            Text(title)
+                .font(SpyTheme.mono(9, weight: .bold))
+                .tracking(1)
+                .foregroundStyle(action == .close ? SpyTheme.textSecondary : SpyTheme.accent)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .overlay(Rectangle().strokeBorder(SpyTheme.accentDim, lineWidth: 0.75))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(action.help)
     }
 
     private var header: some View {
@@ -191,6 +233,25 @@ struct ConfidenceMeter: View {
             Text("\(Int((confidence * 100).rounded()))%")
                 .foregroundStyle(SpyTheme.accent)
                 .padding(.leading, 3)
+        }
+    }
+}
+
+/// What the user can do from the HUD's More actions.
+enum HUDAction: Equatable {
+    case copy
+    case openArchive
+    case notUseful
+    case skipLanguage
+    case close
+
+    var help: String {
+        switch self {
+        case .copy: return "Copy the translation"
+        case .openArchive: return "Open in the archive"
+        case .notUseful: return "Show less of this"
+        case .skipLanguage: return "Never translate this language"
+        case .close: return "Close"
         }
     }
 }

@@ -1,4 +1,4 @@
-# Ambient Screen Intelligence (v0.4)
+# Ambient Screen Intelligence (v0.5-dev)
 
 ユーザーが見ている画面を AI も一緒に見て、**本当に価値があるときだけ**静かに補足情報を出す macOS メニューバーアプリです。
 
@@ -70,6 +70,7 @@ swift test
 | --- | --- |
 | Running / Paused until … | 現在の状態 |
 | Pause 5 Minutes / Pause 30 Minutes | 一定時間キャプチャと解析を完全停止し、自動で再開 |
+| Pause Until Tomorrow | 翌朝 6:00 まで停止 |
 | Pause | 手動で再開するまで停止 |
 | Resume | 再開 |
 | Last: … / Not Useful | 直前の HUD を「役に立たない」と学習させ、似た表示を減らす |
@@ -124,6 +125,9 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **AI Router（ignore-first）**: ルールベースの `InterestScorer` で 0.0〜1.0 のスコアを付け、0.7 以上のものだけ表示。メニューバー領域の文字やコーディングアプリでは減点
 - **Cooldown**: 同じ内容は 5 分間再表示しない（OCR の揺れを吸収する正規化キー）
 - **HUD**: 透明・最前面・クリック透過の `NSPanel` + SwiftUI。fade in 300ms → 3〜6 秒表示 → fade out 400ms。画面右上に表示
+- **HUD の More 操作（v0.5）**: HUD にポインタを 0.6 秒置くとカードだけがクリック可能になり、COPY / ARCHIVE（その翻訳で Archive を開く）/ NOT USEFUL / MUTE <言語> / ✕ を表示。ポインタを外すと 0.4 秒で元のクリック透過に戻る。キーボードの入力先は奪わない
+- **Personalization の重み（v0.5）**: 仕様の比率どおり、閉じる −1 / More を開く +2 / コピー・Archive・検索 +3 / Not Useful −4（単位 0.03、上限 ±0.3）
+- **Debug overlay（v0.5）**: 設定の Developer でオンにすると、変化領域・OCR 範囲・Router の候補とスコア・件数・各段の処理時間を画面に重ねる。認識テキストは出さない。Instruments の Points of Interest に `ocr` / `translate` 区間を記録。実機検証の手順は [docs/perf/CHECKLIST-v0.4.1.md](docs/perf/CHECKLIST-v0.4.1.md)
 - **Visual Memory / Semantic Search（v0.4）**: HUD に表示した情報（原文・翻訳・BRIEF・アプリ・ウィンドウタイトル・言語・時刻）だけを記録し、⌥⌘K の「ARCHIVE」ウィンドウから自然言語で検索
   - 「昨日見ていたフランス語の美術館」「German train notice today」「さっきの英語」のような日付・言語の指定を解釈（`MemoryQueryParser`）
   - キーワード一致（日本語は 2 文字単位の部分一致）＋ NaturalLanguage のオンデバイス文埋め込みによる意味検索＋新しさで順位付け（`VisualMemoryIndex`）
@@ -141,7 +145,7 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **Pause / Resume**: 5 分・30 分・無期限。停止中はキャプチャ自体を止める
 - **Privacy**: 除外アプリ（1Password などのパスワードマネージャー、メッセージ、写真）とパスワード系ウィンドウタイトルでは解析しない
 - **Performance Mode**: Battery / Balanced / Performance（キャプチャ 5/15/30fps、Vision 0.5/1/2fps）
-- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization、DecodeEffect、Briefing、VisualMemory など 87 件
+- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization、DecodeEffect、Briefing、VisualMemory、PauseSchedule、Diagnostics など 96 件
 
 ## プロジェクト構成
 
