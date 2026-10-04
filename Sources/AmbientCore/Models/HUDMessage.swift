@@ -19,6 +19,10 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
         case qrCode
         /// "Pick up where you left off" (title = session name).
         case resume
+        /// An animal, plant or landmark identified in the cloud (title = name, original = scientific name / place).
+        case identification
+        /// A public figure named on screen (title = name, original = role).
+        case publicFigure
     }
 
     public let id: UUID

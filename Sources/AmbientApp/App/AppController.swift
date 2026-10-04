@@ -29,6 +29,8 @@ final class AppController: ObservableObject {
     /// Opens the archive's sessions tab.
     var openSessions: (() -> Void)?
     private let tracker: ActivityTracker
+    private let networkGate: NetworkGate
+    private let gemini: GeminiProvider
     private var wakeObserver: NSObjectProtocol?
     private static let lastResumeOfferKey = "lastResumeOffer"
     private let translationBridge = TranslationBridge()
@@ -65,6 +67,11 @@ final class AppController: ObservableObject {
             embedding: NLTextEmbedding()
         )
         tracker = ActivityTracker(store: memoryStore, foreground: foreground, namer: reasoner)
+        networkGate = NetworkGate(policy: Self.networkPolicy(for: settings)) { [weak settings] record in
+            DispatchQueue.main.async { settings?.appendSentRecord(record) }
+        }
+        gemini = GeminiProvider(gate: networkGate)
+        gemini.configure(available: Self.networkPolicy(for: settings).isUsable, model: settings.geminiModel)
         if let legacy = directory?.appendingPathComponent("visual-memory.json") {
             let store = memoryStore
             Task { await store.importLegacyJSON(at: legacy) }
@@ -190,6 +197,12 @@ final class AppController: ObservableObject {
         await capture.stop()
     }
 
+    // MARK: Cloud
+
+    private static func networkPolicy(for settings: AppSettings) -> NetworkPolicy {
+        NetworkPolicy(cloudEnabled: settings.cloudEnabled, hasAPIKey: settings.hasGeminiKey, performanceMode: settings.performanceMode)
+    }
+
     // MARK: Resume
 
     private var trackerConfiguration: ActivityTracker.Configuration {
@@ -295,6 +308,16 @@ final class AppController: ObservableObject {
         case .skipLanguage:
             lastMessage = message
             stopTranslatingLastLanguage()
+        case .webSearch, .wikipedia:
+            recordFeedback(.searched, for: message)
+            let name = message.title
+                .replacingOccurrences(of: "（の可能性があります）", with: "")
+                .replacingOccurrences(of: " (possibly)", with: "")
+            let query = message.kind == .identification && !message.original.isEmpty ? message.original : name
+            let url = action == .webSearch
+                ? IdentificationPolicy.webSearchURL(for: query)
+                : IdentificationPolicy.wikipediaURL(for: name, language: message.targetLanguage ?? settings.targetLanguage)
+            if let url { NSWorkspace.shared.open(url) }
         case .markKnown:
             let store = memoryStore
             let term = message.title
@@ -367,6 +390,10 @@ final class AppController: ObservableObject {
 
     private func settingsDidChange() {
         screenShare.setPretend(settings.pretendScreenSharing)
+        let policy = Self.networkPolicy(for: settings)
+        let gate = networkGate
+        Task { await gate.update(policy) }
+        gemini.configure(available: policy.isUsable, model: settings.geminiModel)
         let store = memoryStore
         let retention = settings.memoryRetentionDays
         let language = settings.targetLanguage
@@ -426,6 +453,7 @@ final class AppController: ObservableObject {
             reasoner: reasoner,
             screenShare: screenShare,
             page: tracker.page,
+            cloud: gemini,
             displayID: displayID,
             present: { event in
                 await MainActor.run { [weak self] in

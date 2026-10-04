@@ -6,6 +6,8 @@ public enum EntityType: String, Sendable, Codable, CaseIterable {
     case organization
     case place
     case term
+    case species
+    case landmark
 }
 
 /// A named thing found in on-screen text.

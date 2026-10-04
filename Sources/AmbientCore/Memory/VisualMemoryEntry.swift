@@ -8,6 +8,8 @@ public struct VisualMemoryEntry: Sendable, Equatable, Codable, Identifiable {
         case explanation
         case errorAnalysis
         case codeSummary
+        case identification
+        case publicFigure
     }
 
     public let id: UUID

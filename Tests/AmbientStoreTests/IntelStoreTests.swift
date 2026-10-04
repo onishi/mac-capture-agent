@@ -156,3 +156,19 @@ final class IntelStoreTests: XCTestCase {
         XCTAssertEqual(VectorCoding.vector(from: VectorCoding.data(from: vector)), vector)
     }
 }
+
+final class GenericKnowledgeTests: XCTestCase {
+    func testPersonKnowledgeIsSeparateFromTerms() async {
+        let store = IntelStore(url: nil, retentionDays: 7, userLanguage: "ja", embedding: StubEmbeddingForKnowledge())
+        let cate = ExtractedEntity(type: .person, name: "Cate Blanchett")
+        await store.saveKnowledge(entity: cate, summary: "Actor", detail: "TÁR\nCarol", source: "gemini")
+        let person = await store.knowledge(type: .person, canonical: cate.canonicalName)
+        XCTAssertEqual(person?.summary, "Actor")
+        let asTerm = await store.knowledge(forTerm: cate.canonicalName)
+        XCTAssertNil(asTerm)
+    }
+}
+
+private struct StubEmbeddingForKnowledge: TextEmbedding {
+    func vector(for text: String, language: String) -> [Float]? { nil }
+}

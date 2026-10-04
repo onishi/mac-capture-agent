@@ -6,6 +6,7 @@ struct SettingsView: View {
     var onPurgeMemory: (() -> Void)?
     var briefingAvailable: Bool = AppleIntelligenceBriefingProvider().isAvailable
     @State private var newBundleIdentifier = ""
+    @State private var apiKeyDraft = ""
 
     init(settings: AppSettings, onResetPersonalization: (() -> Void)? = nil, onPurgeMemory: (() -> Void)? = nil) {
         _settings = ObservedObject(wrappedValue: settings)
@@ -131,6 +132,39 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Cloud identification (Gemini)") {
+                Toggle("Use Google Gemini to identify animals, plants, landmarks and public figures", isOn: $settings.cloudEnabled)
+                HStack {
+                    SecureField(settings.hasGeminiKey ? "API key saved in Keychain" : "Gemini API key", text: $apiKeyDraft)
+                    Button(settings.hasGeminiKey ? "Replace" : "Save") {
+                        settings.saveGeminiKey(apiKeyDraft)
+                        apiKeyDraft = ""
+                    }
+                    .disabled(apiKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                    if settings.hasGeminiKey {
+                        Button("Remove", role: .destructive) { settings.removeGeminiKey() }
+                    }
+                }
+                TextField("Model", text: $settings.geminiModel)
+                Toggle("Identify public figures named on screen", isOn: $settings.publicFigureEnabled)
+                    .disabled(!settings.cloudEnabled)
+                Text("Nothing is sent until this is on and a key is saved, and never in Battery mode. Only a cropped image region (animals, plants, landmarks) or a name with nearby text (public figures) is sent — never the whole screen, never faces, never text containing secrets.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if !settings.sentRecords.isEmpty {
+                    ForEach(settings.sentRecords) { record in
+                        HStack {
+                            Text(record.date, style: .time).font(.caption.monospaced())
+                            Text(record.purpose).font(.caption)
+                            Spacer()
+                            Text("\(record.bytes / 1024) KB\(record.includesImage ? " · image" : "")")
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
             Section("Screen sharing") {
                 Toggle("Warn about secrets while sharing the screen", isOn: $settings.warnSensitiveWhileSharing)
                 Toggle("Cover secrets while sharing (experimental)", isOn: $settings.redactWhileSharing)
@@ -146,7 +180,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 780)
+        .frame(width: 520, height: 820)
     }
 
     private func addBundleIdentifier() {

@@ -78,6 +78,11 @@ struct HUDCardView: View {
                 actionButton("COPY", .copy)
             case .resume:
                 actionButton("SESSIONS", .openArchive)
+            case .identification, .publicFigure:
+                actionButton("COPY", .copy)
+                actionButton("WEB", .webSearch)
+                actionButton("WIKI", .wikipedia)
+                actionButton("NOT USEFUL", .notUseful)
             case .translation, .explanation, .errorAnalysis, .codeSummary:
                 actionButton("COPY", .copy)
                 actionButton("ARCHIVE", .openArchive)
@@ -90,7 +95,7 @@ struct HUDCardView: View {
                 if let language = message.sourceLanguage {
                     actionButton("MUTE \(LanguageCode.base(language).uppercased())", .skipLanguage)
                 }
-            case .errorAnalysis, .codeSummary, .securityWarning, .qrCode, .resume:
+            case .errorAnalysis, .codeSummary, .securityWarning, .qrCode, .resume, .identification, .publicFigure:
                 EmptyView()
             }
             Spacer(minLength: 0)
@@ -130,6 +135,8 @@ struct HUDCardView: View {
         case .securityWarning: return "⚠ WARNING // EXPOSURE RISK"
         case .qrCode: return "SCAN // QR PAYLOAD"
         case .resume: return "RESUME // LAST OPERATION"
+        case .identification: return "TARGET // IDENTIFICATION"
+        case .publicFigure: return "DOSSIER // PUBLIC FIGURE"
         }
     }
 
@@ -142,6 +149,8 @@ struct HUDCardView: View {
         case .securityWarning: return "SHARING"
         case .qrCode: return "QR"
         case .resume: return "RESUME"
+        case .identification: return "ID"
+        case .publicFigure: return "DOSSIER"
         }
     }
 
@@ -149,8 +158,8 @@ struct HUDCardView: View {
     private var tint: Color {
         switch message.kind {
         case .errorAnalysis, .securityWarning: return SpyTheme.alert
-        case .resume: return SpyTheme.intel
-        case .translation, .explanation, .codeSummary, .qrCode: return SpyTheme.accent
+        case .resume, .publicFigure: return SpyTheme.intel
+        case .translation, .explanation, .codeSummary, .qrCode, .identification: return SpyTheme.accent
         }
     }
 
@@ -305,6 +314,8 @@ enum HUDAction: Equatable {
     case notUseful
     case skipLanguage
     case markKnown
+    case webSearch
+    case wikipedia
     case close
 
     var help: String {
@@ -314,6 +325,8 @@ enum HUDAction: Equatable {
         case .notUseful: return "Show less of this"
         case .skipLanguage: return "Never translate this language"
         case .markKnown: return "I know this term — don't explain it again"
+        case .webSearch: return "Search the web in your browser"
+        case .wikipedia: return "Open Wikipedia in your browser"
         case .close: return "Close"
         }
     }

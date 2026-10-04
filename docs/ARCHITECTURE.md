@@ -259,7 +259,7 @@ CREATE VIRTUAL TABLE intel_fts USING fts5(title, body, briefing, content='intel'
 | PD-4 | パスワード系ウィンドウでは解析しない | タイトルのキーワード判定 |
 | PD-5 | ログに認識テキストを出さない | 件数・文字数・言語コードのみ |
 | PD-6 | 記録するのは派生データのみ | Visual Memory はテキストとメタデータのみ。バックアップ除外 |
-| PD-7 | クラウド送信は切り抜き領域のみ・オプトイン・送信前に秘密情報検出を通す | v0.8 で実装 |
+| PD-7 | クラウド送信は切り抜き領域のみ・オプトイン・送信前に秘密情報検出を通す | `NetworkGate`（オプトイン・キー・Battery・許可ホスト）、`ImageCropper`、秘密情報を含む領域は送らない。送信履歴（目的・ホスト・サイズ）を設定画面に表示 |
 | PD-8 | ユーザーがいつでも止められ、消せる | Pause、記録オフ、全削除 |
 
 ### 6.2 データの流れと保存先
@@ -280,7 +280,7 @@ CREATE VIRTUAL TABLE intel_fts USING fts5(title, body, briefing, content='intel'
 | 現在 | 画面収録（TCC）、App Sandbox、Hardened Runtime | 画面取得 | 初回起動時 |
 | v0.7 | なし（ポインタ位置・クリップボードの変化回数は権限不要） | Interest Region、自動ブックマーク | — |
 | v0.7 | Apple Events（`com.apple.security.automation.apple-events` と対象ブラウザの temporary exception、`NSAppleEventsUsageDescription`） | ブラウザの URL（D-5 決定） | macOS がブラウザごとに初回だけ確認。設定でオフ可 |
-| v0.8 | `com.apple.security.network.client` | クラウド AI・Web 検索 | 設定でオプトインするまで通信しない。README のプライバシー表記を更新 |
+| v0.8 | `com.apple.security.network.client`（D-4 決定） | Gemini による識別（D-2 決定） | 設定でオプトインし API キー（キーチェーン保存）を入れるまで通信しない。通信先は Gemini API のみ |
 | v1.0 以降 | マイク、音声認識 | Audio Intelligence | 機能単位でオプトイン |
 
 ネットワーク Entitlement を付けた後も「オプトインするまで一切通信しない」ことを、通信層を 1 か所（`NetworkGate`）に集約して保証する。

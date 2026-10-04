@@ -17,6 +17,10 @@ struct PipelineConfiguration: Sendable, Equatable {
     var warnSensitiveWhileSharing: Bool = true
     /// Experimental: cover secrets with opaque boxes while the screen is shared.
     var redactWhileSharing: Bool = false
+    /// Gemini identification (opt-in; also requires an API key and not Battery mode).
+    var cloudEnabled: Bool = false
+    /// Look up public figures whose names appear on screen next to a face.
+    var publicFigureEnabled: Bool = true
     /// Draw changed regions, OCR areas, router scores and timings on screen.
     var debugOverlay: Bool = false
 }
@@ -66,6 +70,10 @@ actor AnalysisPipeline {
     private let reasoner: (any PipelineReasoner)?
     private let screenShare: ScreenShareMonitor
     private let page: PageContext
+    private let cloud: (any CloudIdentifying)?
+    private let faceDetector = FaceDetector()
+    private var cloudLimiter = RateLimiter(minimumInterval: 30)
+    private var personCooldown = CooldownCache(duration: 24 * 60 * 60)
     private let displayID: CGDirectDisplayID
     private let sensitiveDetector = SensitiveDataDetector()
     private var warningCooldown = CooldownCache(duration: 60)
@@ -97,6 +105,7 @@ actor AnalysisPipeline {
         reasoner: (any PipelineReasoner)?,
         screenShare: ScreenShareMonitor,
         page: PageContext,
+        cloud: (any CloudIdentifying)?,
         displayID: CGDirectDisplayID,
         present: @escaping Presenter
     ) {
@@ -122,6 +131,7 @@ actor AnalysisPipeline {
         self.reasoner = configuration.reasoningEnabled ? reasoner : nil
         self.screenShare = screenShare
         self.page = page
+        self.cloud = configuration.cloudEnabled ? cloud : nil
         self.displayID = displayID
     }
 
@@ -275,6 +285,12 @@ actor AnalysisPipeline {
         var outcome: IntelOutcome?
         if action.action == .ignore, let code = codes.first {
             outcome = await showQRCode(code.payload, rect: code.rect, app: app, timestamp: frame.timestamp)
+        }
+        if action.action == .ignore, outcome == nil, let cloud, cloud.isAvailable {
+            let cloudStart = clock.now
+            outcome = await identifyWithCloud(cloud, categories: categories, regions: padded, blocks: safeBlocks,
+                                              findings: findings, frame: frame, app: app, windowTitle: windowTitle)
+            if outcome != nil { diagnostics.timings["cloud"] = Self.milliseconds(clock.now - cloudStart) }
         }
         switch action.action {
         case .ignore:
@@ -476,6 +492,110 @@ actor AnalysisPipeline {
         return CGPoint(x: (location.x - bounds.minX) / bounds.width, y: (location.y - bounds.minY) / bounds.height)
     }
 
+    // MARK: Cloud identification (Gemini, opt-in)
+
+    /// Animals / plants / landmarks from a cropped image, or a public figure
+    /// named on screen next to a visible face. Returns nil when nothing was tried.
+    private func identifyWithCloud(
+        _ cloud: any CloudIdentifying,
+        categories: [VisualCategory],
+        regions: [ChangedRegion],
+        blocks: [RecognizedTextRegion],
+        findings: [SensitiveFinding],
+        frame: AnalyzableFrame,
+        app: ForegroundContextProvider.Snapshot,
+        windowTitle: String?
+    ) async -> IntelOutcome? {
+        let context = blocks.map(\.text).joined(separator: " ")
+
+        if let hint = categories.first(where: { [.animal, .plant, .landmark].contains($0) }),
+           let largest = regions.max(by: { $0.area < $1.area }),
+           Double(largest.area) >= IdentificationPolicy.minimumRegionArea {
+            // Never send a region that contains sensitive text.
+            guard !findings.contains(where: { $0.region?.intersects(largest.rect) ?? true }) else { return .discarded }
+            guard cloudLimiter.allow(now: frame.timestamp) else { return .cooldown }
+            guard let jpeg = ImageCropper.jpeg(from: frame.pixelBuffer, region: largest.rect) else { return .discarded }
+            do {
+                let answer = try await cloud.identify(imageJPEG: jpeg, hint: hint, context: context, targetLanguage: configuration.targetLanguage)
+                guard IdentificationPolicy.accept(answer, hint: hint) else { return .discarded }
+                let key = CooldownCache.key(action: .ignore, payload: "id " + answer.name)
+                guard cooldown.checkAndRecord(key, now: frame.timestamp) else { return .cooldown }
+                let entityType: EntityType = answer.category == "landmark" ? .landmark : .species
+                let action: SuggestedAction = answer.category == "landmark" ? .identifyLandmark : (answer.category == "plant" ? .identifyPlant : .identifyAnimal)
+                var message = HUDMessage(
+                    kind: .identification,
+                    title: IdentificationPolicy.displayName(answer.name, confidence: answer.confidence, language: configuration.targetLanguage),
+                    original: answer.scientificName,
+                    detail: answer.facts.prefix(3).joined(separator: "\n"),
+                    anchor: largest.rect,
+                    features: PersonalizationFeatures(action: action, language: nil, bundleIdentifier: app.bundleIdentifier),
+                    targetLanguage: configuration.targetLanguage,
+                    confidence: answer.confidence
+                )
+                let entity = ExtractedEntity(type: entityType, name: answer.name)
+                message = await withReappearance(message, entities: [entity])
+                await present(.show(message, briefingPending: false))
+                await rememberIfEnabled(message, app: app, windowTitle: windowTitle, entities: [entity])
+                Log.pipeline.info("Identified \(answer.category, privacy: .public) via cloud")
+                return .shown
+            } catch {
+                Log.pipeline.error("Cloud identification failed: \(String(describing: error), privacy: .public)")
+                return .failed
+            }
+        }
+
+        guard configuration.publicFigureEnabled else { return nil }
+        let text = ([windowTitle].compactMap { $0 } + blocks.map(\.text)).joined(separator: "\n")
+        let people = NLEntityExtractor.entities(in: text).filter { $0.type == .person }
+        guard let person = people.first(where: { !personCooldown.isCoolingDown($0.canonicalName, now: frame.timestamp) }) else { return nil }
+        var faceVisible = categories.contains(.person)
+        if !faceVisible {
+            faceVisible = await faceDetector.containsFace(in: frame.pixelBuffer, regions: regions)
+        }
+        guard faceVisible else { return nil }
+        personCooldown.record(person.canonicalName, now: frame.timestamp)
+
+        var profile: PublicFigureAnswer?
+        if let cached = await store.knowledge(type: .person, canonical: person.canonicalName) {
+            guard cached.summary != TermExplanationSanitizer.declinedMarker else { return .discarded }
+            profile = PublicFigureAnswer(isPublicFigure: true, name: cached.name, role: cached.summary,
+                                         knownFor: cached.detail?.components(separatedBy: "\n") ?? [], confidence: 1)
+        } else {
+            guard cloudLimiter.allow(now: frame.timestamp) else { return .cooldown }
+            do {
+                let answer = try await cloud.publicFigure(named: person.name, context: String(text.prefix(300)), targetLanguage: configuration.targetLanguage)
+                let accepted = IdentificationPolicy.accept(answer, nameOnScreen: person.name)
+                await store.saveKnowledge(
+                    entity: person,
+                    summary: accepted ? answer.role : TermExplanationSanitizer.declinedMarker,
+                    detail: accepted ? answer.knownFor.prefix(3).joined(separator: "\n") : nil,
+                    source: "gemini"
+                )
+                profile = accepted ? answer : nil
+            } catch {
+                Log.pipeline.error("Public figure lookup failed: \(String(describing: error), privacy: .public)")
+                return .failed
+            }
+        }
+        guard let profile else { return .discarded }
+        let japanese = LanguageCode.base(configuration.targetLanguage) == "ja"
+        let works = profile.knownFor.prefix(3).map { "・" + $0 }.joined(separator: "\n")
+        var message = HUDMessage(
+            kind: .publicFigure,
+            title: profile.name,
+            original: profile.role,
+            detail: works.isEmpty ? profile.role : (japanese ? "代表作\n" : "Known for\n") + works,
+            anchor: nil,
+            features: PersonalizationFeatures(action: .identifyPerson, language: nil, bundleIdentifier: app.bundleIdentifier),
+            targetLanguage: configuration.targetLanguage
+        )
+        message = await withReappearance(message, entities: [person])
+        await present(.show(message, briefingPending: false))
+        await rememberIfEnabled(message, app: app, windowTitle: windowTitle, entities: [person])
+        Log.pipeline.info("Public figure shown")
+        return .shown
+    }
+
     // MARK: QR codes
 
     /// Shows where an on-screen QR code leads (people can't read QR codes on a screen).
@@ -600,6 +720,8 @@ actor AnalysisPipeline {
         case .explanation: kind = .explanation
         case .errorAnalysis: kind = .errorAnalysis
         case .codeSummary: kind = .codeSummary
+        case .identification: kind = .identification
+        case .publicFigure: kind = .publicFigure
         }
         await store.remember(VisualMemoryEntry(
             id: message.id,

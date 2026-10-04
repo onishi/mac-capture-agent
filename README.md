@@ -1,4 +1,4 @@
-# Ambient Screen Intelligence (v0.7)
+# Ambient Screen Intelligence (v0.8)
 
 ユーザーが見ている画面を AI も一緒に見て、**本当に価値があるときだけ**静かに補足情報を出す macOS メニューバーアプリです。
 
@@ -106,7 +106,8 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 
 | Entitlement | 理由 |
 | --- | --- |
-| `com.apple.security.app-sandbox` | サンドボックス化。ネットワーク・ファイルアクセスの Entitlement は **付与していません** |
+| `com.apple.security.app-sandbox` | サンドボックス化。ファイルアクセスの Entitlement は付与していません |
+| `com.apple.security.network.client` | Gemini による識別（v0.8、オプトイン）。設定でオンにして API キーを保存するまで通信しません。通信先は Gemini API のみ |
 | `com.apple.security.automation.apple-events`（＋対象ブラウザの temporary exception） | 前面タブの URL を読むため（v0.7）。macOS がブラウザごとに初回だけ許可を求め、設定でオフにできる |
 | Hardened Runtime | 有効 |
 
@@ -126,6 +127,11 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **AI Router（ignore-first）**: ルールベースの `InterestScorer` で 0.0〜1.0 のスコアを付け、0.7 以上のものだけ表示。メニューバー領域の文字やコーディングアプリでは減点
 - **Cooldown**: 同じ内容は 5 分間再表示しない（OCR の揺れを吸収する正規化キー）
 - **HUD**: 透明・最前面・クリック透過の `NSPanel` + SwiftUI。fade in 300ms → 3〜6 秒表示 → fade out 400ms。画面右上に表示
+- **クラウド識別（v0.8, Google Gemini, オプトイン）**: 設定で Gemini をオンにし API キーを保存すると有効
+  - **動植物・ランドマーク**: 大きな画像の変化を Vision で粗分類し、該当範囲の切り抜きを Gemini で識別。`TARGET // IDENTIFICATION` に名前・学名や場所・3 つまでの補足。確度 0.8 未満は「〜の可能性があります」、0.55 未満は表示しない
+  - **公人（著名人）**: 顔が写っている画面で、字幕・キャプション・タイトルなど画面上の文字に出ている人名と周辺テキストを Gemini に渡し、公人であれば `DOSSIER // PUBLIC FIGURE` に肩書きと代表作を表示。顔画像は送らず、顔から人物を特定することはしない。一般人と判定された場合や確度が低い場合は表示しない（判定結果は 30 日キャッシュ、同じ人は 1 日 1 回まで）
+  - HUD の **WEB / WIKI** でブラウザの Google 検索・Wikipedia を開く（アプリ自身は通信しない）
+  - 通信は `NetworkGate` に集約。オプトイン・API キー・Battery モード・許可ホスト（Gemini API のみ）を強制し、送信履歴を設定画面に表示。Gemini の呼び出しは 30 秒に 1 回まで
 - **作業コンテキスト（v0.7）**: 前面のページ（ブラウザは URL、ほかはアプリ＋ウィンドウタイトル）と閲覧時間を記録
   - **自動ブックマーク**: 閲覧時間・再訪・コピー・ポインタ滞在・HUD 表示から重要度を推定し、高いページを ★ で保存（保持期間を過ぎても残る）
   - **作業セッション**: Slack → Chrome → GitHub → VS Code → Terminal のような一連の作業を 1 つにまとめ、Apple Intelligence が名前を付ける（無ければキーワード）
@@ -164,7 +170,7 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **Pause / Resume**: 5 分・30 分・無期限。停止中はキャプチャ自体を止める
 - **Privacy**: 除外アプリ（1Password などのパスワードマネージャー、メッセージ、写真）とパスワード系ウィンドウタイトルでは解析しない
 - **Performance Mode**: Battery / Balanced / Performance（キャプチャ 5/15/30fps、Vision 0.5/1/2fps）
-- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization、DecodeEffect、Briefing、VisualMemory、PauseSchedule、Diagnostics、TermExtractor、IntelStore、ErrorDetector、SensitiveDataDetector、WorkSessionClusterer、BookmarkScorer など 149 件（うちストア 14 件は macOS のみ）
+- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization、DecodeEffect、Briefing、VisualMemory、PauseSchedule、Diagnostics、TermExtractor、IntelStore、ErrorDetector、SensitiveDataDetector、WorkSessionClusterer、BookmarkScorer、GeminiAPI、NetworkPolicy など 161 件（うちストア 15 件は macOS のみ）
 
 ## プロジェクト構成
 
@@ -230,7 +236,7 @@ Xcode プロジェクトは Xcode 16 の「同期フォルダ」を使ってい�
 - **Local First**: OCR・言語判定・翻訳・画像分類はすべて Mac 上で実行します
 - **保存しない**: 画面キャプチャはメモリ上でのみ扱い、ディスクに保存しません。前フレームは 320px の輝度サムネイルだけを保持します
 - **Visual Memory**: 記録するのは HUD に実際に表示したテキストと付随情報だけで、画像は一切保存しません。保存先はこの Mac のアプリ専用領域の SQLite データベースで、バックアップ対象外です。設定でオフにでき、いつでも全削除できます
-- **送信しない**: アプリはサンドボックス化されており、ネットワークの Entitlement を持ちません。Cloud AI は未実装で、将来導入する場合も明示的なオプトインとします
+- **送信は明示的なオプトインのみ**: 既定では一切通信しません。設定で Gemini をオンにし API キーを保存した場合だけ、①動植物・ランドマークと判定した画像領域の切り抜き（最大 768px）、②顔が写っている画面で文字として表示されている人名と周辺テキスト、を Google Gemini API に送ります。画面全体・顔画像・秘密情報を含む領域は送りません。Battery モードでは送りません。送った内容の種類・サイズ・時刻は設定画面で確認できます。API キーはキーチェーンに保存します
 - **除外**: パスワードマネージャー、メッセージ、写真などはキャプチャ画像から除去され、解析もされません。パスワード入力画面らしいウィンドウタイトルでも解析を止めます。除外アプリは設定画面で追加できます
 - **ログ**: OCR したテキストの本文はログに記録しません（件数・文字数・言語コードのみ）
 - **保存される設定**: 翻訳先言語・モード・除外アプリなどの設定値と、Personalization の重み（アクション・言語・アプリ ID ごとの数値のみ）を `UserDefaults` に保存します

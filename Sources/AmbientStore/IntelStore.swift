@@ -132,12 +132,17 @@ actor IntelStore: VisualMemoryStore {
     }
 
     func knowledge(forTerm canonical: String, now: Date = Date()) -> KnowledgeRecord? {
+        knowledge(type: .term, canonical: canonical, now: now)
+    }
+
+    /// Cached knowledge about any entity (term, person, …), if not expired.
+    func knowledge(type: EntityType, canonical: String, now: Date = Date()) -> KnowledgeRecord? {
         read("knowledge") { db -> KnowledgeRecord? in
             guard let row = try Row.fetchOne(db, sql: """
                 SELECT e.name, k.summary, k.detail, k.source, k.expires_at FROM knowledge k
                 JOIN entity e ON e.id = k.entity_id
-                WHERE e.type = 'term' AND e.canonical_name = ? AND k.expires_at > ?
-                """, arguments: [canonical, now.timeIntervalSince1970]) else { return nil }
+                WHERE e.type = ? AND e.canonical_name = ? AND k.expires_at > ?
+                """, arguments: [type.rawValue, canonical, now.timeIntervalSince1970]) else { return nil }
             return KnowledgeRecord(
                 name: row["name"],
                 summary: row["summary"],
@@ -149,8 +154,12 @@ actor IntelStore: VisualMemoryStore {
     }
 
     func saveKnowledge(term: String, summary: String, detail: String?, source: String, ttl: TimeInterval = 30 * 24 * 60 * 60, now: Date = Date()) {
+        saveKnowledge(entity: ExtractedEntity(type: .term, name: term), summary: summary, detail: detail, source: source, ttl: ttl, now: now)
+    }
+
+    func saveKnowledge(entity: ExtractedEntity, summary: String, detail: String?, source: String, ttl: TimeInterval = 30 * 24 * 60 * 60, now: Date = Date()) {
         perform("saveKnowledge") { db in
-            let id = try Self.upsertEntity(ExtractedEntity(type: .term, name: term), in: db)
+            let id = try Self.upsertEntity(entity, in: db)
             try db.execute(sql: """
                 INSERT INTO knowledge (entity_id, summary, detail, source, updated_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(entity_id) DO UPDATE SET summary = excluded.summary, detail = excluded.detail,
@@ -296,6 +305,8 @@ actor IntelStore: VisualMemoryStore {
         case .explanation: return "term"
         case .errorAnalysis: return "error"
         case .codeSummary: return "code"
+        case .identification: return "identification"
+        case .publicFigure: return "person"
         }
     }
 

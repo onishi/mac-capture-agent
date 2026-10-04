@@ -314,6 +314,8 @@ struct ArchiveView: View {
         case .explanation: return "TERM"
         case .errorAnalysis: return "FAULT"
         case .codeSummary: return "CODE"
+        case .identification: return "ID"
+        case .publicFigure: return "DOSSIER"
         }
     }
 

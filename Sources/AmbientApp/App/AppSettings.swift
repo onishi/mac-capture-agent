@@ -25,6 +25,9 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         static let pageTracking = "pageTrackingEnabled"
         static let browserURLs = "readBrowserURLs"
         static let resume = "resumeEnabled"
+        static let cloud = "cloudEnabled"
+        static let geminiModel = "geminiModel"
+        static let publicFigures = "publicFigureEnabled"
     }
 
     static let supportedTargetLanguages = ["ja", "en", "zh-Hans", "zh-Hant", "ko", "fr", "de", "es", "it", "pt"]
@@ -101,6 +104,37 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
     @Published var resumeEnabled: Bool {
         didSet { defaults.set(resumeEnabled, forKey: Key.resume) }
     }
+    /// Gemini identification. Off until the user opts in; nothing is sent before.
+    @Published var cloudEnabled: Bool {
+        didSet { defaults.set(cloudEnabled, forKey: Key.cloud) }
+    }
+    @Published var geminiModel: String {
+        didSet { defaults.set(geminiModel, forKey: Key.geminiModel) }
+    }
+    /// Look up public figures whose names appear on screen (text only).
+    @Published var publicFigureEnabled: Bool {
+        didSet { defaults.set(publicFigureEnabled, forKey: Key.publicFigures) }
+    }
+    /// Whether a Gemini API key is stored in the Keychain (the key itself is never kept here).
+    @Published private(set) var hasGeminiKey: Bool
+    /// What was sent to the cloud this session (purpose, host, size — never content).
+    @Published private(set) var sentRecords: [SentRecord] = []
+
+    func saveGeminiKey(_ key: String) {
+        KeychainStore.saveAPIKey(key)
+        hasGeminiKey = KeychainStore.readAPIKey() != nil
+    }
+
+    func removeGeminiKey() {
+        KeychainStore.deleteAPIKey()
+        hasGeminiKey = false
+    }
+
+    func appendSentRecord(_ record: SentRecord) {
+        sentRecords.insert(record, at: 0)
+        if sentRecords.count > 20 { sentRecords.removeLast(sentRecords.count - 20) }
+    }
+
     /// Developer overlay: regions, router scores and timings (never text).
     @Published var debugOverlay: Bool {
         didSet { defaults.set(debugOverlay, forKey: Key.debugOverlay) }
@@ -131,6 +165,10 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         pageTrackingEnabled = defaults.object(forKey: Key.pageTracking) as? Bool ?? true
         readBrowserURLs = defaults.object(forKey: Key.browserURLs) as? Bool ?? true
         resumeEnabled = defaults.object(forKey: Key.resume) as? Bool ?? true
+        cloudEnabled = defaults.bool(forKey: Key.cloud)
+        geminiModel = defaults.string(forKey: Key.geminiModel) ?? GeminiAPI.defaultModel
+        publicFigureEnabled = defaults.object(forKey: Key.publicFigures) as? Bool ?? true
+        hasGeminiKey = KeychainStore.readAPIKey() != nil
     }
 
     // MARK: Personalization (aggregated weights only, never screen content)
@@ -166,6 +204,8 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
             reasoningEnabled: reasoningEnabled,
             warnSensitiveWhileSharing: warnSensitiveWhileSharing,
             redactWhileSharing: redactWhileSharing,
+            cloudEnabled: cloudEnabled && hasGeminiKey,
+            publicFigureEnabled: publicFigureEnabled,
             debugOverlay: debugOverlay
         )
     }
