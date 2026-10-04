@@ -28,6 +28,7 @@ public struct AnalysisScheduler: Sendable {
     public private(set) var pending: [ChangedRegion] = []
     private var pendingSince: TimeInterval?
     private var lastAnalysis: TimeInterval?
+    private var priority: ChangedRegion?
 
     public init(configuration: AnalysisSchedulerConfiguration = AnalysisSchedulerConfiguration()) {
         self.configuration = configuration
@@ -38,9 +39,26 @@ public struct AnalysisScheduler: Sendable {
         pendingSince = nil
     }
 
+    /// An Interest Region (pointer resting on it) is analyzed at the next
+    /// allowed tick, without waiting for the screen to settle.
+    public mutating func prioritize(_ region: ChangedRegion, at time: TimeInterval) {
+        priority = region
+        if pendingSince == nil { pendingSince = time }
+    }
+
     /// Feeds the result of one change-detection tick.
     /// - Returns: the regions to analyze now, or `nil` when nothing should run.
     public mutating func ingest(_ regions: [ChangedRegion], at time: TimeInterval) -> [ChangedRegion]? {
+        if let priority {
+            let intervalElapsed = lastAnalysis.map { time - $0 >= configuration.minimumAnalysisInterval } ?? true
+            guard intervalElapsed else { return nil }
+            self.priority = nil
+            let result = RegionMerger.merge([priority] + pending + regions, within: configuration.mergeDistance)
+            pending = []
+            pendingSince = nil
+            lastAnalysis = time
+            return selectRegions(result)
+        }
         let stillChanging = !regions.isEmpty
         if stillChanging {
             pending = RegionMerger.merge(pending + regions, within: configuration.mergeDistance)

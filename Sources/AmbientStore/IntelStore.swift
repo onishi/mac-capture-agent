@@ -92,7 +92,7 @@ actor IntelStore: VisualMemoryStore {
 
     func removeAll() {
         perform("removeAll") { db in
-            try db.execute(sql: "DELETE FROM observation; DELETE FROM embedding; DELETE FROM intel_fts;")
+            try db.execute(sql: "DELETE FROM observation; DELETE FROM embedding; DELETE FROM intel_fts; DELETE FROM work_session;")
         }
         Self.logger.info("Visual memory purged")
     }
@@ -218,7 +218,11 @@ actor IntelStore: VisualMemoryStore {
                 SELECT i.id FROM intel i JOIN observation o ON o.id = i.observation_id WHERE o.timestamp < ?
                 """, arguments: [cutoff])
             try Self.delete(intelIDs: expired, in: db)
-            try db.execute(sql: "DELETE FROM observation WHERE timestamp < ?", arguments: [cutoff])
+            // Bookmarked pages are kept until the user deletes them.
+            try db.execute(sql: """
+                DELETE FROM observation WHERE timestamp < ? AND id NOT IN (SELECT observation_id FROM bookmark)
+                """, arguments: [cutoff])
+            try db.execute(sql: "DELETE FROM work_session WHERE ended_at < ?", arguments: [cutoff])
             try db.execute(sql: "DELETE FROM knowledge WHERE expires_at < ?", arguments: [now.timeIntervalSince1970])
         }
     }
@@ -337,7 +341,7 @@ actor IntelStore: VisualMemoryStore {
         return id
     }
 
-    private func perform(_ operation: String, _ body: (Database) throws -> Void) {
+    func perform(_ operation: String, _ body: (Database) throws -> Void) {
         guard let database else { return }
         do {
             try database.writer.write(body)
@@ -346,7 +350,7 @@ actor IntelStore: VisualMemoryStore {
         }
     }
 
-    private func read<T>(_ operation: String, _ body: (Database) throws -> T) -> T? {
+    func read<T>(_ operation: String, _ body: (Database) throws -> T) -> T? {
         guard let database else { return nil }
         do {
             return try database.writer.read(body)

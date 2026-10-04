@@ -102,6 +102,31 @@ struct IntelDatabase: Sendable {
                 );
                 """)
         }
+        migrator.registerMigration("v2-sessions") { db in
+            try db.execute(sql: """
+                ALTER TABLE observation ADD COLUMN session_id TEXT;
+                ALTER TABLE observation ADD COLUMN duration REAL;
+                ALTER TABLE observation ADD COLUMN page_key TEXT;
+                CREATE INDEX observation_page ON observation(page_key);
+                CREATE INDEX observation_category_time ON observation(category, timestamp);
+
+                CREATE TABLE work_session (
+                  id TEXT PRIMARY KEY,
+                  title TEXT,
+                  started_at REAL NOT NULL,
+                  ended_at REAL NOT NULL,
+                  apps TEXT,
+                  summary TEXT,
+                  active_seconds REAL NOT NULL DEFAULT 0
+                );
+
+                CREATE TABLE bookmark (
+                  observation_id TEXT PRIMARY KEY REFERENCES observation(id) ON DELETE CASCADE,
+                  score REAL NOT NULL,
+                  reasons TEXT NOT NULL
+                );
+                """)
+        }
         return migrator
     }
 }
