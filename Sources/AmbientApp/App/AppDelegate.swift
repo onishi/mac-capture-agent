@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: SettingsWindowController?
     private var archiveWindow: ArchiveWindowController?
     private var archiveHotKey: GlobalHotKey?
+    private var onboardingWindow: OnboardingWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Menu bar only: no Dock icon (also set via LSUIElement in Info.plist).
@@ -36,10 +37,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.openSessions = { [weak archiveWindow] in
             archiveWindow?.show(tab: .sessions)
         }
+        let onboardingWindow = OnboardingWindowController { [weak self, weak settingsWindow] in
+            OnboardingModel(
+                settings: settings,
+                appleIntelligenceAvailable: AppleIntelligenceReasoner().isAvailable,
+                openSettings: { settingsWindow?.show() },
+                onFinish: { self?.finishOnboarding() }
+            )
+        }
+        self.onboardingWindow = onboardingWindow
         menuBar = MenuBarController(
             controller: controller,
             openSettings: { [weak settingsWindow] in settingsWindow?.show() },
-            openArchive: { [weak archiveWindow] in archiveWindow?.show() }
+            openArchive: { [weak archiveWindow] in archiveWindow?.show() },
+            openGuide: { [weak onboardingWindow] in onboardingWindow?.show() }
         )
         // ⌥⌘K opens the archive from anywhere.
         archiveHotKey = GlobalHotKey(keyCode: kVK_ANSI_K, modifiers: cmdKey | optionKey) { [weak archiveWindow] in
@@ -50,6 +61,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         Log.app.info("Launched")
+        if settings.onboardingCompleted {
+            Task { await controller.start() }
+        } else {
+            // First launch: explain before asking for Screen Recording.
+            onboardingWindow.show()
+        }
+    }
+
+    private func finishOnboarding() {
+        let isFirstRun = !settings.onboardingCompleted
+        settings.onboardingCompleted = true
+        onboardingWindow?.close()
+        // Re-opening the guide from the menu must not undo a pause.
+        guard isFirstRun, let controller else { return }
         Task { await controller.start() }
     }
 

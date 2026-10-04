@@ -108,6 +108,7 @@ final class OverlayWindowController {
             for panel in panels { panel.animator().alphaValue = 1 }
         }
         Log.hud.info("HUD displayed")
+        announce(message)
 
         deadline = Date().addingTimeInterval(message.displayDuration(withBriefing: briefingPending))
         lifecycleTask?.cancel()
@@ -132,6 +133,23 @@ final class OverlayWindowController {
             layout()
         }
         startAnimating(keepRunning: false)
+    }
+
+    /// The panels are click-through and non-activating, so VoiceOver would
+    /// never reach the card on its own: read it once as an announcement.
+    private func announce(_ message: HUDMessage) {
+        guard NSWorkspace.shared.isVoiceOverEnabled,
+              let parts = AccessibilityAnnouncement.parts(title: message.title, detail: message.detail)
+        else { return }
+        let text = String(localized: "Ambient Screen Intelligence: \(parts.title). \(parts.detail)")
+        NSAccessibility.post(
+            element: NSApplication.shared,
+            notification: .announcementRequested,
+            userInfo: [
+                .announcement: text,
+                .priority: NSAccessibilityPriorityLevel.medium.rawValue,
+            ]
+        )
     }
 
     func hide() {

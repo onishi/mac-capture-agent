@@ -31,6 +31,7 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         static let mediaMode = "mediaModeEnabled"
         static let newsMode = "newsModeEnabled"
         static let spoiler = "spoilerLevel"
+        static let onboardingCompleted = "onboardingCompleted"
     }
 
     static let supportedTargetLanguages = ["ja", "en", "zh-Hans", "zh-Hant", "ko", "fr", "de", "es", "it", "pt"]
@@ -137,6 +138,7 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
     func saveGeminiKey(_ key: String) {
         KeychainStore.saveAPIKey(key)
         hasGeminiKey = KeychainStore.readAPIKey() != nil
+        onboardingCompleted = defaults.bool(forKey: Key.onboardingCompleted)
     }
 
     func removeGeminiKey() {
@@ -152,6 +154,11 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
     /// Developer overlay: regions, router scores and timings (never text).
     @Published var debugOverlay: Bool {
         didSet { defaults.set(debugOverlay, forKey: Key.debugOverlay) }
+    }
+
+    /// Set once the first-run guide has been finished.
+    @Published var onboardingCompleted: Bool {
+        didSet { defaults.set(onboardingCompleted, forKey: Key.onboardingCompleted) }
     }
 
     init(defaults: UserDefaults = .standard) {

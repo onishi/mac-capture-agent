@@ -45,7 +45,7 @@ struct SettingsView: View {
             Section("Analysis") {
                 Picker("Mode", selection: $settings.performanceMode) {
                     ForEach(PerformanceMode.allCases) { mode in
-                        Text(mode.displayName).tag(mode)
+                        Text(LocalizedStringKey(mode.displayName)).tag(mode)
                     }
                 }
                 Toggle("Classify images (experimental)", isOn: $settings.imageClassificationEnabled)
@@ -57,9 +57,9 @@ struct SettingsView: View {
                     .disabled(!briefingAvailable)
                 Toggle("Explain technical terms and judge borderline text", isOn: $settings.reasoningEnabled)
                     .disabled(!briefingAvailable)
-                Text(briefingAvailable
-                     ? "Adds a one-line note about what the text means for you. Runs entirely on this Mac."
-                     : "Requires macOS 26 with Apple Intelligence turned on.")
+                (briefingAvailable
+                    ? Text("Adds a one-line note about what the text means for you. Runs entirely on this Mac.")
+                    : Text("Requires macOS 26 with Apple Intelligence turned on."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -74,7 +74,7 @@ struct SettingsView: View {
                     .disabled(!settings.memoryEnabled || !settings.pageTrackingEnabled)
                 Picker("Keep for", selection: $settings.memoryRetentionDays) {
                     ForEach(AppSettings.retentionChoices, id: \.self) { days in
-                        Text(days == 1 ? "1 day" : "\(days) days").tag(days)
+                        (days == 1 ? Text("1 day") : Text("\(days) days")).tag(days)
                     }
                 }
                 .disabled(!settings.memoryEnabled)
@@ -89,7 +89,7 @@ struct SettingsView: View {
             Section("HUD") {
                 Picker("Position", selection: $settings.hudPosition) {
                     ForEach(HUDPosition.allCases) { position in
-                        Text(position.displayName).tag(position)
+                        Text(LocalizedStringKey(position.displayName)).tag(position)
                     }
                 }
                 Text("Hovering the HUD keeps it on screen and tells the app the information was useful. Use “Not Useful” in the menu bar to see less of something.")
@@ -135,8 +135,8 @@ struct SettingsView: View {
             Section("Cloud identification (Gemini)") {
                 Toggle("Use Google Gemini to identify animals, plants, landmarks and public figures", isOn: $settings.cloudEnabled)
                 HStack {
-                    SecureField(settings.hasGeminiKey ? "API key saved in Keychain" : "Gemini API key", text: $apiKeyDraft)
-                    Button(settings.hasGeminiKey ? "Replace" : "Save") {
+                    SecureField(settings.hasGeminiKey ? LocalizedStringKey("API key saved in Keychain") : LocalizedStringKey("Gemini API key"), text: $apiKeyDraft)
+                    Button(settings.hasGeminiKey ? LocalizedStringKey("Replace") : LocalizedStringKey("Save")) {
                         settings.saveGeminiKey(apiKeyDraft)
                         apiKeyDraft = ""
                     }
@@ -157,7 +157,7 @@ struct SettingsView: View {
                             Text(record.date, style: .time).font(.caption.monospaced())
                             Text(record.purpose).font(.caption)
                             Spacer()
-                            Text("\(record.bytes / 1024) KB\(record.includesImage ? " · image" : "")")
+                            Text(verbatim: "\(record.bytes / 1024) KB\(record.includesImage ? " · image" : "")")
                                 .font(.caption.monospaced())
                                 .foregroundStyle(.secondary)
                         }
@@ -169,7 +169,7 @@ struct SettingsView: View {
                 Toggle("Movie / Anime mode (work card, cast on screen)", isOn: $settings.mediaModeEnabled)
                 Picker("Spoilers", selection: $settings.spoilerLevel) {
                     ForEach(SpoilerLevel.allCases) { level in
-                        Text(level.displayName).tag(level)
+                        Text(LocalizedStringKey(level.displayName)).tag(level)
                     }
                 }
                 .disabled(!settings.mediaModeEnabled)
@@ -188,7 +188,7 @@ struct SettingsView: View {
             }
 
             Section("Privacy") {
-                Text("Screen content is processed in memory on this Mac only. Nothing is saved to disk or sent over the network.")
+                Text("Screen content is processed in memory on this Mac. Screen images are never saved. Nothing is sent over the network unless you turn on Cloud identification.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -8,6 +8,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private let controller: AppController
     private let openSettings: () -> Void
     private let openArchive: () -> Void
+    private let openGuide: () -> Void
     private var statusObservation: AnyCancellable?
 
     private static let timeFormatter: DateFormatter = {
@@ -17,10 +18,11 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         return formatter
     }()
 
-    init(controller: AppController, openSettings: @escaping () -> Void, openArchive: @escaping () -> Void) {
+    init(controller: AppController, openSettings: @escaping () -> Void, openArchive: @escaping () -> Void, openGuide: @escaping () -> Void) {
         self.controller = controller
         self.openSettings = openSettings
         self.openArchive = openArchive
+        self.openGuide = openGuide
         super.init()
 
         let menu = NSMenu()
@@ -67,12 +69,12 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
         if let last = controller.lastMessage {
             menu.addItem(.separator())
-            let header = NSMenuItem(title: "Last: \(Self.truncated(last.detail))", action: nil, keyEquivalent: "")
+            let header = NSMenuItem(title: String(localized: "Last: \(Self.truncated(last.detail))"), action: nil, keyEquivalent: "")
             header.isEnabled = false
             menu.addItem(header)
             menu.addItem(item("Not Useful", #selector(markNotUseful)))
             if last.features?.language != nil {
-                menu.addItem(item("Stop Translating \(last.title)", #selector(stopTranslatingLanguage)))
+                menu.addItem(item(verbatim: String(localized: "Stop Translating \(last.title)"), #selector(stopTranslatingLanguage)))
             }
         }
 
@@ -83,6 +85,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         menu.addItem(archive)
         menu.addItem(item("Preview HUD", #selector(previewHUD)))
         menu.addItem(item("Settings…", #selector(showSettings), key: ","))
+        menu.addItem(item("Welcome Guide…", #selector(showGuide)))
         menu.addItem(.separator())
         menu.addItem(item("Quit Ambient Screen Intelligence", #selector(quit), key: "q"))
     }
@@ -101,11 +104,17 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     @objc private func grantPermission() { controller.openScreenRecordingSettings() }
     @objc private func openTranslationLanguages() { controller.openTranslationSettings() }
     @objc private func showSettings() { openSettings() }
+    @objc private func showGuide() { openGuide() }
     @objc private func quit() { NSApp.terminate(nil) }
 
     // MARK: Helpers
 
-    private func item(_ title: String, _ action: Selector, enabled: Bool = true, key: String = "") -> NSMenuItem {
+    /// Literal titles are looked up in Localizable.xcstrings.
+    private func item(_ title: String.LocalizationValue, _ action: Selector, enabled: Bool = true, key: String = "") -> NSMenuItem {
+        item(verbatim: String(localized: title), action, enabled: enabled, key: key)
+    }
+
+    private func item(verbatim title: String, _ action: Selector, enabled: Bool = true, key: String = "") -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
         item.target = self
         item.isEnabled = enabled
@@ -137,15 +146,18 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     private static func title(for status: AppController.Status) -> String {
         switch status {
-        case .idle: return "Stopped"
-        case .starting: return "Starting…"
-        case .running: return "Running"
+        case .idle: return String(localized: "Stopped")
+        case .starting: return String(localized: "Starting…")
+        case .running: return String(localized: "Running")
         case .paused(let until?):
-            let day = Calendar.current.isDateInToday(until) ? "" : (Calendar.current.isDateInTomorrow(until) ? "tomorrow " : "")
-            return "Paused until \(day)\(timeFormatter.string(from: until))"
-        case .paused(nil): return "Paused"
-        case .needsPermission: return "Screen Recording permission required"
-        case .failed(let reason): return "Error: \(reason)"
+            let time = timeFormatter.string(from: until)
+            if Calendar.current.isDateInTomorrow(until) {
+                return String(localized: "Paused until tomorrow \(time)")
+            }
+            return String(localized: "Paused until \(time)")
+        case .paused(nil): return String(localized: "Paused")
+        case .needsPermission: return String(localized: "Screen Recording permission required")
+        case .failed(let reason): return String(localized: "Error: \(reason)")
         }
     }
 }

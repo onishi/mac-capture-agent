@@ -1,10 +1,10 @@
-# Ambient Screen Intelligence (v0.9)
+# Ambient Screen Intelligence (v0.10)
 
 ユーザーが見ている画面を AI も一緒に見て、**本当に価値があるときだけ**静かに補足情報を出す macOS メニューバーアプリです。
 
 > 何を表示するかより、何を表示しないかを重視する。
 
-現在は v0.4 です。画面の変化した部分だけを解析し、外国語の文章を翻訳して HUD に表示します。あわせて、オンデバイス LLM による一行の補足（BRIEF）と、表示した情報の記憶・検索（Archive）を備えています。
+現在は v0.10（製品化の候補）です。画面の変化した部分だけを解析し、外国語の翻訳・専門用語やエラーの解説・秘密情報の警告・作業の記憶と復元を行い、オプトインで Gemini による識別や作品・ニュースの補足を加えます。初回起動ガイド・日本語表示・VoiceOver に対応しました。実機での検証が終わったものを v1.0 とします。
 
 ## ドキュメント
 
@@ -13,6 +13,7 @@
 | [docs/SPEC.md](docs/SPEC.md) | 製品仕様（要件 ID と実装状況） |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 技術構成・データ設計・プライバシー設計 |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 開発計画（マイルストーン・完了条件・判断事項・実機チェックリスト） |
+| [docs/RELEASE.md](docs/RELEASE.md) | 署名・公証・DMG の作り方 |
 | [docs/IMPLEMENTATION_PROMPT.md](docs/IMPLEMENTATION_PROMPT.md) | Claude Code / Codex にそのまま渡せる開発プロンプト |
 | [CLAUDE.md](CLAUDE.md) | 開発ルール |
 
@@ -60,8 +61,8 @@ swift test
 ## 起動方法
 
 1. 起動するとメニューバーに 👁 アイコンが表示されます（Dock には表示されません）
-2. 初回は画面収録の権限ダイアログが出ます（下記参照）
-3. 権限付与後にアプリを再起動すると `Running` になり、解析が始まります
+2. 初回はガイド（FIELD MANUAL）が開き、機能・必要な権限・任意機能・プライバシーを順に説明します。画面収録を許可すると **Start** が押せるようになります（下記参照）
+3. 権限付与後にアプリを再起動し、ガイドの **Start** を押すと `Running` になり、解析が始まります（2 回目以降の起動ではガイドは出ません）
 4. ブラウザで外国語（例: フランス語のニュース記事）を開くと、画面右上に翻訳 HUD が数秒表示されます
 
 メニュー:
@@ -79,6 +80,7 @@ swift test
 | Preview HUD | マウスポインタ付近にデモの HUD を表示（見た目の確認用） |
 | Translation Languages… | 翻訳言語モデルの設定画面を開く |
 | Settings… | 翻訳先言語、モード、除外アプリなど |
+| Welcome Guide… | 初回起動ガイドをもう一度開く |
 | Quit | 終了 |
 
 デバッグログは Console.app でサブシステム `com.onishi.AmbientScreenIntelligence` を指定すると確認できます（`Capture started` / `Change detected` / `OCR started` / `Foreign language detected` / `Translated` / `HUD displayed` など）。OCR したテキスト本文はログに出しません。
@@ -127,6 +129,12 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **AI Router（ignore-first）**: ルールベースの `InterestScorer` で 0.0〜1.0 のスコアを付け、0.7 以上のものだけ表示。メニューバー領域の文字やコーディングアプリでは減点
 - **Cooldown**: 同じ内容は 5 分間再表示しない（OCR の揺れを吸収する正規化キー）
 - **HUD**: 透明・最前面・クリック透過の `NSPanel` + SwiftUI。fade in 300ms → 3〜6 秒表示 → fade out 400ms。画面右上に表示
+- **製品化（v0.10）**
+  - 初回起動ガイド（6 ステップ。画面収録が許可されるまで開始しない。メニューから再表示可能）
+  - 日本語ローカライズ（メニュー・設定・ガイド。HUD のコードネームなどの演出文字は英語）
+  - VoiceOver: オンのとき HUD の内容を一度だけ読み上げ
+  - 性能の回帰テスト。正規表現の事前コンパイルと縮小処理の改善で、エラー検出・秘密情報検出・5K フレームの縮小を高速化
+  - アプリアイコン、Developer ID 配布スクリプト（`scripts/release.sh`、[docs/RELEASE.md](docs/RELEASE.md)）
 - **Movie / Anime モード（v0.9）**: YouTube・Netflix・Prime Video・Disney+・Crunchyroll・Hulu・U-NEXT・ABEMA・dアニメストア・Apple TV などをタイトル／URL から判定し、作品名と話数（「第5話」「S2E5」「Episode 3」）を解析
   - 新しい作品を見始めると 1 日 1 回 `DOSSIER // FEATURE`（年・原作・主要キャスト／声優・主題歌・あらすじ）。Gemini 使用、送るのはタイトルだけ
   - 字幕やテロップにキャラクター名・演者名が出ると `CAST // ON SCREEN`（取得済みのキャストと端末内で照合、追加の通信なし）
@@ -176,7 +184,7 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **Pause / Resume**: 5 分・30 分・無期限。停止中はキャプチャ自体を止める
 - **Privacy**: 除外アプリ（1Password などのパスワードマネージャー、メッセージ、写真）とパスワード系ウィンドウタイトルでは解析しない
 - **Performance Mode**: Battery / Balanced / Performance（キャプチャ 5/15/30fps、Vision 0.5/1/2fps）
-- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization、DecodeEffect、Briefing、VisualMemory、PauseSchedule、Diagnostics、TermExtractor、IntelStore、ErrorDetector、SensitiveDataDetector、WorkSessionClusterer、BookmarkScorer、GeminiAPI、NetworkPolicy、MediaTitleParser、NewsDetector など 176 件（うちストア 16 件は macOS のみ）
+- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization、DecodeEffect、Briefing、VisualMemory、PauseSchedule、Diagnostics、TermExtractor、IntelStore、ErrorDetector、SensitiveDataDetector、WorkSessionClusterer、BookmarkScorer、GeminiAPI、NetworkPolicy、MediaTitleParser、NewsDetector、Onboarding、性能の回帰テストなど 185 件（うちストア 16 件は macOS のみ）
 
 ## プロジェクト構成
 
@@ -212,6 +220,8 @@ Xcode プロジェクトは Xcode 16 の「同期フォルダ」を使ってい�
 ## 既知の制限
 
 - 同時にキャプチャするディスプレイは 1 枚です（メイン、またはマウスポインタのあるディスプレイ）
+- ローカライズは日本語と英語のみです。HUD に出る翻訳・解説の本文は設定の「翻訳先」の言語で、カードの演出文字（コードネーム・`INTEL` など）は英語です
+- 配布用の署名・公証は判断事項 D-6 の決定と Developer ID 証明書が必要です（現在の CI ビルドは未署名）
 - HUD の位置はキャプチャ時点の座標です。HUD 表示までにスクロールすると少しずれることがあります
 - 翻訳には、事前に翻訳言語モデルのダウンロードが必要です
 - macOS 15 の翻訳は SwiftUI `.translationTask` を 1×1 の透明ウィンドウでホストする方式のため、環境によっては動作しない可能性があります（8 秒でタイムアウトし、何も表示しません）。macOS 26 では直接 `TranslationSession` を使います
@@ -235,7 +245,8 @@ Xcode プロジェクトは Xcode 16 の「同期フォルダ」を使ってい�
 | M3 | v0.7 | マウス注目領域、自動ブックマーク、作業セッション、作業復元 |
 | M4 | v0.8 | Web 検索とクラウド AI（オプトイン）、動植物・ランドマーク識別 |
 | M5 | v0.9 | Movie / Anime / News モード |
-| — | v1.0 | 製品化（性能・オンボーディング・配布） |
+| — | v0.10 | 製品化の候補（ガイド・日本語・VoiceOver・性能テスト・配布準備） |
+| — | v1.0 | 実機チェックリストを通したもの |
 
 ## Privacy policy（概要）
 
