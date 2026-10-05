@@ -115,7 +115,7 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 
 画面収録は TCC（ユーザー許可）で管理されるため、追加の Entitlement は不要です。
 
-## 実装済みの機能（v0.1）
+## 実装済みの機能（v0.1〜v0.10）
 
 - **メニューバー常駐アプリ**（`LSUIElement`、SwiftUI App + AppKit `NSStatusItem`）
 - **Screen Capture**: `SCStream` でメインディスプレイを取得。自分自身の HUD と除外アプリのウィンドウはキャプチャ画像から除去
@@ -125,7 +125,7 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **OCR**: Vision `VNRecognizeTextRequest`（accurate、言語自動判定）を**変化領域だけ**に実行。折り返された行は段落にまとめる
 - **言語判定**: NaturalLanguage `NLLanguageRecognizer`。短い文字列（`OK`, `Go`, `AI`, `Mac` など）、UI 定型句、URL・コード、ユーザーが読める言語は無視
 - **翻訳**: `TranslationProvider` プロトコルで抽象化。実装は Apple Translation framework（macOS 26 は `TranslationSession` を直接生成、macOS 15 は `.translationTask` ブリッジ経由）
-- **画像分類**: Vision `VNClassifyImageRequest` を大きな画像変化に低頻度で実行し、`person / animal / plant / food / landmark / text / unknown` にマッピング（v0.1 では表示には使わない）
+- **画像分類**: Vision `VNClassifyImageRequest` を大きな画像変化に低頻度で実行し、`person / animal / plant / food / landmark / text / unknown` にマッピング。識別対象の候補選びに利用し、詳細の識別はオプトイン時に Gemini で行う
 - **AI Router（ignore-first）**: ルールベースの `InterestScorer` で 0.0〜1.0 のスコアを付け、0.7 以上のものだけ表示。メニューバー領域の文字やコーディングアプリでは減点
 - **Cooldown**: 同じ内容は 5 分間再表示しない（OCR の揺れを吸収する正規化キー）
 - **HUD**: 透明・最前面・クリック透過の `NSPanel` + SwiftUI。fade in 300ms → 3〜6 秒表示 → fade out 400ms。画面右上に表示
@@ -201,7 +201,9 @@ Sources/
 │   ├── Presentation/       HUDPlacement
 │   ├── Settings/           PerformanceMode
 │   ├── Memory/             VisualMemoryEntry, VisualMemoryIndex, MemoryQueryParser
+│   ├── Context/, Cloud/, Coding/, Knowledge/, Media/, Security/  各機能の判定ロジック
 │   └── Future/             AnalysisResult
+├── AmbientStore/           SQLite（GRDB）の保存層、macOS の swift test 対象
 └── AmbientApp/             macOS アプリ（Xcode ターゲット）
     ├── App/                SwiftUI App, AppDelegate, AppController, AppSettings
     ├── Capture/            ScreenCaptureManager, FrameBuffer, FrameConverter
@@ -209,13 +211,15 @@ Sources/
     ├── Intelligence/       AnalysisPipeline, AIProvider
     ├── Translation/        AppleTranslationProvider, TranslationBridge
     ├── Privacy/            PrivacyManager, ForegroundContextProvider
-    ├── UI/                 OverlayWindowController, HUDView, MenuBarController, Settings
+    ├── Cloud/, Context/    Gemini 通信、閲覧記録、作品・ニュースの補足
+    ├── UI/                 HUD、Archive、Settings、初回起動ガイド
     └── Support/            Log (OSLog)
 Tests/AmbientCoreTests/     ユニットテスト
+Tests/AmbientStoreTests/    SQLite 保存層のテスト（macOS）
 Config/                     Info.plist, Entitlements
 ```
 
-Xcode プロジェクトは Xcode 16 の「同期フォルダ」を使っているため、`Sources/AmbientCore` と `Sources/AmbientApp` にファイルを追加すると自動的にアプリターゲットに含まれます。
+Xcode プロジェクトは Xcode 16 の「同期フォルダ」を使っているため、`Sources/AmbientCore`・`Sources/AmbientStore`・`Sources/AmbientApp` にファイルを追加すると自動的にアプリターゲットに含まれます。
 
 ## 既知の制限
 
@@ -226,14 +230,14 @@ Xcode プロジェクトは Xcode 16 の「同期フォルダ」を使ってい�
 - 翻訳には、事前に翻訳言語モデルのダウンロードが必要です
 - macOS 15 の翻訳は SwiftUI `.translationTask` を 1×1 の透明ウィンドウでホストする方式のため、環境によっては動作しない可能性があります（8 秒でタイムアウトし、何も表示しません）。macOS 26 では直接 `TranslationSession` を使います
 - 起動時点ですでに表示されている内容は解析しません（変化した部分だけが対象）
-- 画像分類の結果はまだ表示に使っていません（ルーターは identify 系を表示閾値未満に抑えています）
+- 画像分類だけでは対象の種や名称を特定できません。詳細な識別には Gemini のオプトインと API キーが必要です
 - 除外アプリの「キャプチャ画像からの除去」は解析開始時点で起動中のアプリが対象です（後から起動したアプリも、前面にある間は解析しません）
 - Briefing は macOS 26 かつ Apple Intelligence が有効な Mac でのみ動作します（それ以外では行ごと表示されません）
-- HUD はクリック透過なので「すぐ閉じる」という操作はありません。減点はメニューの *Not Useful* で行います
-- 「検索した」（`searched`）フィードバックは型だけ用意しており、Web Search 実装時に接続します
+- HUD は通常クリック透過です。カードにポインタを置くと More 操作が開き、✕ で閉じたり *Not Useful* を選んだりできます
+- WEB / WIKI はブラウザで検索ページを開きます。アプリ内で任意の Web 検索結果を取得する機能はありません
 - 開発環境の都合上、本リポジトリの初期実装は Linux 上でコアロジックのビルドとテストのみ検証しています。アプリ本体のビルドは GitHub Actions（macOS ランナー）で確認しています
 
-## 今後の予定
+## 開発履歴と次の段階
 
 詳細は [docs/ROADMAP.md](docs/ROADMAP.md)。
 
@@ -243,7 +247,7 @@ Xcode プロジェクトは Xcode 16 の「同期フォルダ」を使ってい�
 | M1 | v0.5 | SQLite 移行、HUD の More 操作、専門用語の解説、再登場通知、LLM ルーター |
 | M2 | v0.6 | Coding Mode（エラー解析・コード説明）、秘密情報検出、画面共有中の警告 |
 | M3 | v0.7 | マウス注目領域、自動ブックマーク、作業セッション、作業復元 |
-| M4 | v0.8 | Web 検索とクラウド AI（オプトイン）、動植物・ランドマーク識別 |
+| M4 | v0.8 | クラウド AI（オプトイン）、動植物・ランドマーク識別。汎用 Web 検索 API は未実装 |
 | M5 | v0.9 | Movie / Anime / News モード |
 | — | v0.10 | 製品化の候補（ガイド・日本語・VoiceOver・性能テスト・配布準備） |
 | — | v1.0 | 実機チェックリストを通したもの |
@@ -252,7 +256,7 @@ Xcode プロジェクトは Xcode 16 の「同期フォルダ」を使ってい�
 
 - **Local First**: OCR・言語判定・翻訳・画像分類はすべて Mac 上で実行します
 - **保存しない**: 画面キャプチャはメモリ上でのみ扱い、ディスクに保存しません。前フレームは 320px の輝度サムネイルだけを保持します
-- **Visual Memory**: 記録するのは HUD に実際に表示したテキストと付随情報だけで、画像は一切保存しません。保存先はこの Mac のアプリ専用領域の SQLite データベースで、バックアップ対象外です。設定でオフにでき、いつでも全削除できます
+- **Visual Memory と閲覧記録**: 認識テキストは HUD に実際に表示したものだけを記録します。閲覧記録が有効な場合は、ページのタイトル・サニタイズ済み URL・閲覧時間も保存します。画像は保存しません。保存先はこの Mac のアプリ専用領域の SQLite データベースで、バックアップ対象外です。設定でオフにでき、いつでも全削除できます
 - **送信は明示的なオプトインのみ**: 既定では一切通信しません。設定で Gemini をオンにし API キーを保存した場合だけ、①動植物・ランドマークと判定した画像領域の切り抜き（最大 768px）、②顔が写っている画面で文字として表示されている人名と周辺テキスト、③動画のウィンドウタイトル（作品情報）、④ニュースの見出し（背景の検索）、を Google Gemini API に送ります。画面全体・顔画像・秘密情報を含む領域は送りません。Battery モードでは送りません。送った内容の種類・サイズ・時刻は設定画面で確認できます。API キーはキーチェーンに保存します
 - **除外**: パスワードマネージャー、メッセージ、写真などはキャプチャ画像から除去され、解析もされません。パスワード入力画面らしいウィンドウタイトルでも解析を止めます。除外アプリは設定画面で追加できます
 - **ログ**: OCR したテキストの本文はログに記録しません（件数・文字数・言語コードのみ）
