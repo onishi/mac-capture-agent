@@ -354,6 +354,7 @@ actor IntelStore: VisualMemoryStore {
         case .codeSummary: return "code"
         case .identification: return "identification"
         case .publicFigure: return "person"
+        case .summary: return "summary"
         }
     }
 

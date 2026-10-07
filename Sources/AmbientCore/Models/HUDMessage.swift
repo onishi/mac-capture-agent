@@ -14,6 +14,8 @@ public enum IntelSource: String, Sendable, Codable {
     case onDeviceLLM
     /// The user's own history (archive, earlier reading).
     case history
+    /// The Mac's built-in dictionaries.
+    case dictionary
 
     /// Card label (HUD chrome stays English).
     public var label: String {
@@ -22,6 +24,7 @@ public enum IntelSource: String, Sendable, Codable {
         case .onDeviceML: return "SRC ▸ ON-DEVICE ML"
         case .onDeviceLLM: return "SRC ▸ ON-DEVICE AI · ESTIMATE"
         case .history: return "SRC ▸ YOUR HISTORY"
+        case .dictionary: return "SRC ▸ DICTIONARY"
         }
     }
 }
@@ -58,6 +61,8 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
         case regionSummary
         /// A circled area where nothing could be found (short feedback so the request isn't ignored silently).
         case noIntel
+        /// The visible page condensed into up to three lines, on request (title = page, detail = lines).
+        case screenSummary
     }
 
     public let id: UUID
@@ -115,7 +120,8 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
         if let explicitSource { return explicitSource }
         switch kind {
         case .translation, .qrCode: return .onDeviceML
-        case .explanation, .errorAnalysis, .codeSummary, .identification, .publicFigure, .mediaInfo, .newsContext, .regionSummary:
+        case .explanation, .errorAnalysis, .codeSummary, .identification, .publicFigure, .mediaInfo, .newsContext, .regionSummary,
+             .screenSummary:
             return .onDeviceLLM
         case .securityWarning, .conversion, .cast: return .rule
         case .resume: return .history

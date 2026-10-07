@@ -85,6 +85,9 @@ struct HUDCardView: View {
             case .regionSummary:
                 actionButton("COPY", .copy)
                 actionButton("NOT USEFUL", .notUseful)
+            case .screenSummary:
+                actionButton("COPY", .copy)
+                actionButton("ARCHIVE", .openArchive)
             case .noIntel:
                 EmptyView()
             case .resume:
@@ -114,7 +117,7 @@ struct HUDCardView: View {
                     actionButton("MUTE \(LanguageCode.base(language).uppercased())", .skipLanguage)
                 }
             case .errorAnalysis, .codeSummary, .securityWarning, .qrCode, .resume, .identification, .publicFigure,
-                 .mediaInfo, .cast, .newsContext, .conversion, .regionSummary, .noIntel:
+                 .mediaInfo, .cast, .newsContext, .conversion, .regionSummary, .noIntel, .screenSummary:
                 EmptyView()
             }
             Spacer(minLength: 0)
@@ -162,6 +165,7 @@ struct HUDCardView: View {
         case .conversion: return "INTEL // CONVERSION"
         case .regionSummary: return "INTEL // TARGET ANALYSIS"
         case .noIntel: return "SCAN // NO INTEL"
+        case .screenSummary: return "INTEL // PAGE SUMMARY"
         }
     }
 
@@ -182,6 +186,7 @@ struct HUDCardView: View {
         case .conversion: return "UNITS"
         case .regionSummary: return "TARGET"
         case .noIntel: return "NULL"
+        case .screenSummary: return "SUMMARY"
         }
     }
 
@@ -192,6 +197,7 @@ struct HUDCardView: View {
         case .resume, .publicFigure, .mediaInfo, .cast, .newsContext: return SpyTheme.intel
         case .translation, .explanation, .codeSummary, .qrCode, .identification, .conversion, .regionSummary, .noIntel:
             return SpyTheme.accent
+        case .screenSummary: return SpyTheme.intel
         }
     }
 

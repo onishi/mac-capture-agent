@@ -127,6 +127,25 @@ extension AppleIntelligenceReasoner: RegionDescribing {
     }
 }
 
+// MARK: - Summarize the screen (LA-10)
+
+extension AppleIntelligenceReasoner: ScreenSummarizing {
+    func summarize(text: String, title: String?, targetLanguage: String) async throws -> String {
+        #if canImport(FoundationModels)
+        if #available(macOS 26.0, *) {
+            guard SystemLanguageModel.default.isAvailable else { throw BriefingError.unavailable }
+            let session = LanguageModelSession(instructions: ScreenSummary.instructions(targetLanguage: targetLanguage))
+            let response = try await session.respond(
+                to: ScreenSummary.prompt(text: text, title: title),
+                options: GenerationOptions(temperature: 0.2, maximumResponseTokens: 200)
+            )
+            return response.content
+        }
+        #endif
+        throw BriefingError.unavailable
+    }
+}
+
 // MARK: - Ask the archive (LA-30)
 
 extension AppleIntelligenceReasoner: ArchiveAnswering {

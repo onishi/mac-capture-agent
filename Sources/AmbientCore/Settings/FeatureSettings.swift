@@ -24,6 +24,8 @@ public enum IntelFeature: String, CaseIterable, Codable, Sendable, Identifiable 
     case sensitiveWarning
     case circleLookup
     case archiveQuestion
+    case dictionary
+    case screenSummary
 
     public var id: String { rawValue }
 
@@ -38,10 +40,10 @@ public enum IntelFeature: String, CaseIterable, Codable, Sendable, Identifiable 
     /// Needs the on-device LLM (Apple Intelligence) to do anything.
     public var requiresLanguageModel: Bool {
         switch self {
-        case .codeSummary, .identification, .publicFigure, .regionSummary, .briefing, .llmRouter, .mediaCard, .archiveQuestion:
+        case .codeSummary, .identification, .publicFigure, .regionSummary, .briefing, .llmRouter, .mediaCard, .archiveQuestion, .screenSummary:
             return true
         case .qrCode, .errorExplanation, .translation, .unitConversion, .termExplanation, .castOnScreen,
-             .glossary, .errorHints, .newsBackground, .sensitiveWarning, .circleLookup:
+             .glossary, .errorHints, .newsBackground, .sensitiveWarning, .circleLookup, .dictionary:
             return false
         }
     }
@@ -52,7 +54,7 @@ public enum IntelFeature: String, CaseIterable, Codable, Sendable, Identifiable 
         case .qrCode: return "QR codes"
         case .errorExplanation: return "Error causes (terminal, editor)"
         case .translation: return "Translation"
-        case .unitConversion: return "Units, time zones and dates (pointer rest)"
+        case .unitConversion: return "Units, times, dates and cron (pointer rest)"
         case .termExplanation: return "Technical terms"
         case .codeSummary: return "What code does (pointer rest)"
         case .identification: return "Animals, plants, landmarks, dishes, products (estimate)"
@@ -68,6 +70,8 @@ public enum IntelFeature: String, CaseIterable, Codable, Sendable, Identifiable 
         case .sensitiveWarning: return "Warn about secrets while sharing"
         case .circleLookup: return "Circle with ⌥ to look up"
         case .archiveQuestion: return "Answer questions about the archive"
+        case .dictionary: return "Dictionary definitions (macOS dictionaries)"
+        case .screenSummary: return "Summarize the screen (⌥⌘S)"
         }
     }
 

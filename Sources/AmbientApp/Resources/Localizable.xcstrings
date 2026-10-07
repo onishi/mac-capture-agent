@@ -364,6 +364,17 @@
         }
       }
     },
+    "Dictionary definitions (macOS dictionaries)": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "辞書の意味（macOS の辞書）"
+          }
+        }
+      }
+    },
     "Draws changed regions, OCR areas, router scores, counters and timings on screen. Never shows recognized text.": {
       "extractionState": "manual",
       "localizations": {
@@ -1255,6 +1266,28 @@
         }
       }
     },
+    "Summarize Screen": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面を要約"
+          }
+        }
+      }
+    },
+    "Summarize the screen (⌥⌘S)": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面の要約（⌥⌘S）"
+          }
+        }
+      }
+    },
     "Technical terms": {
       "extractionState": "manual",
       "localizations": {
@@ -1365,13 +1398,13 @@
         }
       }
     },
-    "Units, time zones and dates (pointer rest)": {
+    "Units, times, dates and cron (pointer rest)": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "単位・時差・日付の換算（ポインタを止めたとき）"
+            "value": "単位・時差・日付・cron の換算（ポインタを止めたとき）"
           }
         }
       }

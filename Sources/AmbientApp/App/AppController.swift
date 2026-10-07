@@ -330,7 +330,7 @@ final class AppController: ObservableObject {
                 openSessions?()
             } else {
                 recordFeedback(.searched, for: message)
-                openArchive?(message.detail)
+                openArchive?(message.kind == .screenSummary ? message.original : message.detail)
             }
         case .notUseful:
             lastMessage = message
@@ -464,6 +464,12 @@ final class AppController: ObservableObject {
         Log.app.info("Circle lookup monitor started")
     }
 
+    /// ⌥⌘S / menu: summarize what is on screen (LA-10).
+    func summarizeScreen() {
+        guard let pipeline = currentPipeline else { return }
+        Task { await pipeline.summarizeScreen() }
+    }
+
     /// Circling something is the strongest sign of interest: the card it
     /// produced counts like a search (+3) for personalization.
     private func noteCircleAnswered(since start: Date) {
@@ -518,6 +524,7 @@ final class AppController: ObservableObject {
             page: tracker.page,
             media: mediaContext,
             identifier: reasoner,
+            dictionary: DictionaryLookup(),
             displayID: displayID,
             present: { event in
                 await MainActor.run { [weak self] in

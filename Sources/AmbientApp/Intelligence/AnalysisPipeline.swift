@@ -30,7 +30,7 @@ enum HUDEvent: Sendable {
     case redact([CGRect])
 }
 
-typealias PipelineReasoner = TermExplaining & RouterJudging & DeveloperAssisting & RegionDescribing
+typealias PipelineReasoner = TermExplaining & RouterJudging & DeveloperAssisting & RegionDescribing & ScreenSummarizing
 
 /// How a routed action ended, for counters and diagnostics.
 private enum IntelOutcome {
@@ -68,6 +68,8 @@ actor AnalysisPipeline {
     private let media: MediaContext
     private var castCooldown = CooldownCache(duration: 10 * 60)
     private let identifier: (any VisualIdentifying)?
+    /// The Mac's dictionaries, for terms when no LLM is available (LA-5).
+    private let dictionary: (any DictionaryLooking)?
     private let faceDetector = FaceDetector()
     /// On-device identification is slower than the other LLM uses; at most every 20 s.
     private var identifyLimiter = RateLimiter(minimumInterval: 20)
@@ -109,6 +111,7 @@ actor AnalysisPipeline {
         page: PageContext,
         media: MediaContext,
         identifier: (any VisualIdentifying)?,
+        dictionary: (any DictionaryLooking)? = nil,
         displayID: CGDirectDisplayID,
         present: @escaping Presenter
     ) {
@@ -137,6 +140,7 @@ actor AnalysisPipeline {
         self.media = media
         let features = configuration.features
         self.identifier = features.isEnabled(.identification) || features.isEnabled(.publicFigure) ? identifier : nil
+        self.dictionary = configuration.features.isEnabled(.dictionary) ? dictionary : nil
         self.displayID = displayID
     }
 
@@ -501,7 +505,12 @@ actor AnalysisPipeline {
         guard let explanation else { return .discarded }
         cooldown.record(key, now: timestamp)
         let kind = ErrorDetector().detect(in: line)?.kind ?? "Error"
-        let detail = explanation.fix.map { "\(explanation.cause)\n▸ \($0)" } ?? explanation.cause
+        var detail = explanation.fix.map { "\(explanation.cause)\n▸ \($0)" } ?? explanation.cause
+        // Where in the user's own code it happened (LA-21), when the trace shows it.
+        if let frame = StackTraceAnalyzer.ownFrame(in: candidate.context ?? line) {
+            let japanese = LanguageCode.base(configuration.targetLanguage) == "ja"
+            detail += (japanese ? "\n⌖ 自分のコード: " : "\n⌖ Your code: ") + frame.display
+        }
         let message = HUDMessage(
             kind: .errorAnalysis,
             title: kind,
@@ -838,6 +847,69 @@ actor AnalysisPipeline {
         }
     }
 
+    // MARK: Summarize the screen (LOCAL_AI.md LA-10)
+
+    /// On request (⌥⌘S): the visible text of the latest frame, in reading
+    /// order and without secrets, condensed into up to three lines by the
+    /// on-device model, shown and kept in the archive.
+    func summarizeScreen() async {
+        let japanese = LanguageCode.base(configuration.targetLanguage) == "ja"
+        func notice(_ ja: String, _ en: String) async {
+            await present(.show(HUDMessage(kind: .noIntel, title: "NO INTEL", original: "", detail: japanese ? ja : en,
+                                           anchor: nil, targetLanguage: configuration.targetLanguage), briefingPending: false))
+        }
+        guard configuration.features.isEnabled(.screenSummary) else { return }
+        guard let reasoner = activeReasoner else {
+            await notice("要約には Apple Intelligence が必要です", "Summaries need Apple Intelligence")
+            return
+        }
+        guard let frame = await frameBuffer.currentFrame else { return }
+        let app = foreground.current
+        let windowTitle = foreground.windowTitle(for: app.processIdentifier)
+        guard privacy.allowsAnalysis(of: app, windowTitle: windowTitle) else { return }
+        Log.pipeline.info("Screen summary requested")
+
+        let whole = ChangedRegion(rect: CGRect(x: 0, y: 0, width: 1, height: 1), confidence: 1)
+        let lines = await ocr.recognizeText(in: frame.pixelBuffer, regions: [whole])
+        let (safeBlocks, _) = sensitiveDetector.partition(TextBlockGrouper().group(lines))
+        let text = safeBlocks
+            .sorted { ($0.boundingBox.minY, $0.boundingBox.minX) < ($1.boundingBox.minY, $1.boundingBox.minX) }
+            .map(\.text)
+            .joined(separator: "\n")
+        guard text.count >= ScreenSummary.minimumInputLength else {
+            await notice("要約するほどの文章がありません", "Not enough text to summarize")
+            return
+        }
+        let subject = windowTitle ?? app.appName ?? "Screen"
+        let start = clock.now
+        do {
+            let raw = try await reasoner.summarize(text: text, title: windowTitle, targetLanguage: configuration.targetLanguage)
+            guard let summary = ScreenSummary.sanitize(raw, input: text) else {
+                await logAI(.screenSummary, subject: subject, answer: raw, outcome: .filtered, since: start, app: app)
+                await notice("うまく要約できませんでした", "Could not summarize this")
+                return
+            }
+            await logAI(.screenSummary, subject: subject, answer: summary.joined(separator: " / "), outcome: .shown, since: start, app: app)
+            let message = HUDMessage(
+                kind: .screenSummary,
+                title: "SUMMARY",
+                original: subject,
+                detail: summary.map { "・" + $0 }.joined(separator: "\n"),
+                anchor: nil,
+                features: PersonalizationFeatures(action: .explainTerm, language: nil, bundleIdentifier: app.bundleIdentifier),
+                targetLanguage: configuration.targetLanguage
+            )
+            await present(.show(message, briefingPending: false))
+            await rememberIfEnabled(message, app: app, windowTitle: windowTitle, entities: [])
+            counters.hudsShown += 1
+            Log.pipeline.info("Screen summarized (\(text.count) chars)")
+        } catch {
+            Log.pipeline.error("Screen summary failed: \(String(describing: error), privacy: .public)")
+            await logAI(.screenSummary, subject: subject, answer: Self.describe(error), outcome: .failed, since: start, app: app)
+            await notice("要約に失敗しました", "The summary failed")
+        }
+    }
+
     // MARK: Unit conversion (LOCAL_AI.md LA-15)
 
     /// Imperial quantities, times in other zones, timestamps and dates in the
@@ -994,7 +1066,12 @@ actor AnalysisPipeline {
         guard let term = candidate.payload else { return .discarded }
         let definition = glossaryDefinition(for: term, context: candidate.context)
         let reasoner = activeReasoner
-        guard reasoner != nil || definition != nil else { return .discarded }
+        // Without the LLM and the glossary, the Mac's dictionaries — only when asked or clearly worth it.
+        var dictionaryEntry: String?
+        if reasoner == nil, definition == nil, let dictionary, explicit || candidate.interestScore.level == .show {
+            dictionaryEntry = dictionary.definition(of: term)
+        }
+        guard reasoner != nil || definition != nil || dictionaryEntry != nil else { return .discarded }
         let canonical = EntityName.canonical(term)
         if !explicit, await store.shouldSkipTerm(canonical) { return .discarded }
         let key = CooldownCache.key(action: .explainTerm, payload: canonical)
@@ -1010,6 +1087,9 @@ actor AnalysisPipeline {
                 expansion: definition.expansion,
                 summary: japanese ? "以前の画面に書かれていた略語の定義です" : "Defined earlier on your screen"
             )
+        } else if let dictionaryEntry, reasoner == nil {
+            source = .dictionary
+            explanation = TermExplanation(shouldExplain: true, expansion: nil, summary: dictionaryEntry)
         } else if let cached = await store.knowledge(forTerm: canonical) {
             guard cached.summary != TermExplanationSanitizer.declinedMarker else { return .discarded }
             explanation = TermExplanation(shouldExplain: true, expansion: cached.detail, summary: cached.summary)
@@ -1079,6 +1159,7 @@ actor AnalysisPipeline {
         switch message.kind {
         case .translation, .securityWarning, .qrCode, .resume, .mediaInfo, .cast, .newsContext, .conversion, .regionSummary, .noIntel:
             kind = .translation
+        case .screenSummary: kind = .summary
         case .explanation: kind = .explanation
         case .errorAnalysis: kind = .errorAnalysis
         case .codeSummary: kind = .codeSummary

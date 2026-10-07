@@ -83,6 +83,9 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         let archive = item("Archive…", #selector(showArchive), key: "k")
         archive.keyEquivalentModifierMask = [.command, .option]
         menu.addItem(archive)
+        let summary = item("Summarize Screen", #selector(summarizeScreen), enabled: status == .running, key: "s")
+        summary.keyEquivalentModifierMask = [.command, .option]
+        menu.addItem(summary)
         menu.addItem(item("Preview HUD", #selector(previewHUD)))
         menu.addItem(item("Settings…", #selector(showSettings), key: ","))
         menu.addItem(item("Welcome Guide…", #selector(showGuide)))
@@ -98,6 +101,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     @objc private func pauseIndefinitely() { controller.pause(for: nil) }
     @objc private func resume() { Task { await controller.resume() } }
     @objc private func showArchive() { openArchive() }
+    @objc private func summarizeScreen() { controller.summarizeScreen() }
     @objc private func previewHUD() { controller.showDemoHUD() }
     @objc private func markNotUseful() { controller.markLastMessageNotUseful() }
     @objc private func stopTranslatingLanguage() { controller.stopTranslatingLastLanguage() }

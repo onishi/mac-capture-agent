@@ -10,6 +10,8 @@ public struct VisualMemoryEntry: Sendable, Equatable, Codable, Identifiable {
         case codeSummary
         case identification
         case publicFigure
+        /// A screen summary made on request (LA-10).
+        case summary
     }
 
     public let id: UUID

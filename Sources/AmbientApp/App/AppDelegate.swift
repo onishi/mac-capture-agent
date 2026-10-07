@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: SettingsWindowController?
     private var archiveWindow: ArchiveWindowController?
     private var archiveHotKey: GlobalHotKey?
+    private var summaryHotKey: GlobalHotKey?
     private var onboardingWindow: OnboardingWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -57,11 +58,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openGuide: { [weak onboardingWindow] in onboardingWindow?.show() }
         )
         // ⌥⌘K opens the archive from anywhere.
-        archiveHotKey = GlobalHotKey(keyCode: kVK_ANSI_K, modifiers: cmdKey | optionKey) { [weak archiveWindow] in
+        archiveHotKey = GlobalHotKey(keyCode: kVK_ANSI_K, modifiers: cmdKey | optionKey, identifier: 1) { [weak archiveWindow] in
             archiveWindow?.toggle()
         }
         if archiveHotKey == nil {
             Log.app.error("Could not register the ⌥⌘K shortcut")
+        }
+        // ⌥⌘S summarizes what is on screen (LA-10).
+        summaryHotKey = GlobalHotKey(keyCode: kVK_ANSI_S, modifiers: cmdKey | optionKey, identifier: 2) { [weak controller] in
+            controller?.summarizeScreen()
+        }
+        if summaryHotKey == nil {
+            Log.app.error("Could not register the ⌥⌘S shortcut")
         }
 
         Log.app.info("Launched")

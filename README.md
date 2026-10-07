@@ -79,6 +79,7 @@ swift test
 | Last: … / Not Useful | 直前の HUD を「役に立たない」と学習させ、似た表示を減らす |
 | Stop Translating <言語> | 直前の HUD の言語を今後翻訳しない |
 | Archive… (⌥⌘K) | Visual Memory の検索ウィンドウを開く（⌥⌘K はどこからでも有効） |
+| Summarize Screen (⌥⌘S) | 今の画面を 3 行に要約して HUD に出し、Archive に残す（⌥⌘S はどこからでも有効、Apple Intelligence が必要） |
 | Preview HUD | マウスポインタ付近にデモの HUD を表示（見た目の確認用） |
 | Translation Languages… | 翻訳言語モデルの設定画面を開く |
 | Settings… | 翻訳先言語、モード、除外アプリなど |
@@ -124,10 +125,14 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
   - **略語の展開（AI 不要）**: 画面に「Retrieval-Augmented Generation (RAG)」のような定義が出たら覚えておき、別の場所で RAG を見たときに展開を表示（メモリ上のみ、最大 300 件）
   - **単位換算（AI 不要）**: マイル・°F・フィート・インチ・ポンド・オンス・ガロンなどにポインタを 2 秒置くと `INTEL // CONVERSION` でメートル法に換算（翻訳先が英語のときは出さない）
   - **丸で囲んで調べる**: ⌥（Option）を押しながらポインタで丸を描くと、その範囲を必ず調べる。中身に応じて QR → エラー → 翻訳 → 単位 → 用語 → コード → 写真 → 要点（AI）の順で一番合うものを出し、何も無ければ `NO INTEL`。ポインタと修飾キーは CoreGraphics で読み、追加の権限は不要の見込み（実機未確認）。設定でオフにできる
-  - **機能ごとのオン・オフと優先順位**: 設定の「機能と優先順位」で 19 の機能を個別に切り替え、HUD を取り合う 10 の機能は ▲▼ で並べ替えられる（同時に出せるときは上のものが勝つ。丸で囲んだときも同じ）
+  - **機能ごとのオン・オフと優先順位**: 設定の「機能と優先順位」で 21 の機能を個別に切り替え、HUD を取り合う 10 の機能は ▲▼ で並べ替えられる（同時に出せるときは上のものが勝つ。丸で囲んだときも同じ）
   - **AI の回答の記録（AI LOG）**: 端末内の LLM の回答を、表示しなかったもの（見送り・フィルタ・失敗）も含めて記録し、Archive の AI LOG タブで検索・コピーできる。保持期間は Archive と同じで、設定でオフにできる
   - **時差・日付の換算（AI 不要）**: 「3pm PST」「15:00 UTC」→ 手元の時刻、`1700000000` や ISO 8601 → 日時、「2026-10-20」「10月20日」「Oct 20」→「13日後（火）」。単位換算と同じく、ポインタを置いたときと丸で囲んだときだけ
   - **アーカイブに質問**: Archive の検索欄で末尾を `?` にして Return を押すと、検索上位の記録だけを根拠に端末内の AI が答え、使った記録を示す（Apple Intelligence が必要）
+  - **画面の要約（⌥⌘S）**: 今の画面の文章を端末内の AI が 3 行に要約し、Archive に SUMMARY として残す（メニューの「画面を要約」からも。Apple Intelligence が必要）
+  - **辞書（AI 不要）**: Apple Intelligence が無いとき、専門用語を macOS の辞書で引いて意味を出す（丸で囲んだときか、価値が高い候補だけ）
+  - **開発向けのルール（AI 不要）**: エラーのカードにスタックトレースの「自分のコード」の行（ライブラリやランタイムを除く）を添える。cron 式にポインタを置くと「5分ごと」「毎週 月〜金 9:00」と説明
+  - **マイナンバーの検出**: 秘密情報の検出にマイナンバー（チェックデジット検証）を追加。画面共有中は警告の対象
   - **出典の表示**: カードの下に `SRC ▸ RULE / ON-DEVICE ML / ON-DEVICE AI · ESTIMATE / YOUR HISTORY` を表示し、AI の推定と事実を区別する
   - **エラーのヒント（AI 不要）**: Apple Intelligence が無い・失敗したときも、ModuleNotFoundError・EADDRINUSE・command not found・merge conflict など 25 種類に定型の原因と次の一手
 
@@ -197,7 +202,7 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
 - **Pause / Resume**: 5 分・30 分・無期限。停止中はキャプチャ自体を止める
 - **Privacy**: 除外アプリ（1Password などのパスワードマネージャー、メッセージ、写真）とパスワード系ウィンドウタイトルでは解析しない
 - **Performance Mode**: Battery / Balanced / Performance（キャプチャ 5/15/30fps、Vision 0.5/1/2fps）
-- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization、DecodeEffect、Briefing、VisualMemory、PauseSchedule、Diagnostics、TermExtractor、IntelStore、ErrorDetector、SensitiveDataDetector、WorkSessionClusterer、BookmarkScorer、IdentificationPolicy、MediaTitleParser、NewsDetector、Onboarding、UnitConverter、AcronymGlossary、ErrorHints、VisualLabelSelector、CircleGestureRecognizer、ActiveLookupPlanner、FeatureSettings、AIAnswerRecord、TimeConverter、ArchiveQuestion、IntelSource、性能の回帰テストなど（うちストア 16 件は macOS のみ）
+- **Unit Test**: ChangeDetector、AnalysisScheduler、ForeignTextDetector、AIRouter、InterestScore、Cooldown、TextBlockGrouper、PrivacyPolicy 、HUDPlacement、Personalization、DecodeEffect、Briefing、VisualMemory、PauseSchedule、Diagnostics、TermExtractor、IntelStore、ErrorDetector、SensitiveDataDetector、WorkSessionClusterer、BookmarkScorer、IdentificationPolicy、MediaTitleParser、NewsDetector、Onboarding、UnitConverter、AcronymGlossary、ErrorHints、VisualLabelSelector、CircleGestureRecognizer、ActiveLookupPlanner、FeatureSettings、AIAnswerRecord、TimeConverter、ArchiveQuestion、IntelSource、CronExplainer、StackTraceAnalyzer、DictionaryDefinition、ScreenSummary、マイナンバー、性能の回帰テストなど（うちストア 16 件は macOS のみ）
 
 ## プロジェクト構成
 

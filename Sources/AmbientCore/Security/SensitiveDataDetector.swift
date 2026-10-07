@@ -18,6 +18,8 @@ public enum SensitiveKind: String, Sendable, CaseIterable, Equatable {
     case password
     case email
     case phoneNumber
+    /// Japanese Individual Number (マイナンバー), check digit verified (LA-42).
+    case myNumber
 
     /// High severity triggers a warning during screen sharing.
     public var isHighSeverity: Bool {
@@ -41,6 +43,7 @@ public enum SensitiveKind: String, Sendable, CaseIterable, Equatable {
         case .password: return "Password"
         case .email: return "Email address"
         case .phoneNumber: return "Phone number"
+        case .myNumber: return "Individual Number (My Number)"
         }
     }
 
@@ -58,6 +61,7 @@ public enum SensitiveKind: String, Sendable, CaseIterable, Equatable {
         case .password: return "パスワード"
         case .email: return "メールアドレス"
         case .phoneNumber: return "電話番号"
+        case .myNumber: return "マイナンバー（個人番号）"
         }
     }
 }
@@ -95,6 +99,7 @@ public struct SensitiveDataDetector: Sendable {
             result.append(kind)
         }
         if containsCardNumber(text) { result.append(.creditCard) }
+        if containsMyNumber(text) { result.append(.myNumber) }
         return result
     }
 
@@ -128,6 +133,37 @@ public struct SensitiveDataDetector: Sendable {
             searchRange = range.upperBound..<text.endIndex
         }
         return false
+    }
+
+    /// 12 digits with a valid check digit, either written as 4-4-4 groups or
+    /// next to a keyword ("マイナンバー", "個人番号", "My Number") — a bare
+    /// 12-digit number with a matching check digit is too common to flag.
+    private static let myNumberGrouped = CompiledPattern(#"(?<!\d)\d{4}[ \-]\d{4}[ \-]\d{4}(?!\d)"#)
+    private static let myNumberPlain = CompiledPattern(#"(?<!\d)\d{12}(?!\d)"#)
+    private static let myNumberKeyword = CompiledPattern(#"マイナンバー|個人番号|(?i:my\s?number|individual number)"#)
+
+    func containsMyNumber(_ text: String) -> Bool {
+        var candidates = Self.myNumberGrouped.captures(in: text).compactMap { $0.first ?? nil }
+        if Self.myNumberKeyword.matches(text) {
+            candidates += Self.myNumberPlain.captures(in: text).compactMap { $0.first ?? nil }
+        }
+        return candidates.contains { candidate in
+            let digits = candidate.compactMap { $0.wholeNumberValue }
+            return digits.count == 12 && Set(digits).count > 1 && Self.myNumberCheckDigitIsValid(digits)
+        }
+    }
+
+    /// The check digit of the Individual Number (総務省令の計算方法).
+    static func myNumberCheckDigitIsValid(_ digits: [Int]) -> Bool {
+        guard digits.count == 12, let check = digits.last else { return false }
+        var total = 0
+        for n in 1...11 {
+            let digit = digits[11 - n]
+            let weight = n <= 6 ? n + 1 : n - 5
+            total += digit * weight
+        }
+        let remainder = total % 11
+        return check == (remainder <= 1 ? 0 : 11 - remainder)
     }
 
     static func luhn(_ digits: [Int]) -> Bool {

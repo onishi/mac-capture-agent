@@ -326,6 +326,8 @@ struct ArchiveView: View {
         case .sensitiveWarning: return "SHARING"
         case .circleLookup: return "CIRCLE"
         case .archiveQuestion: return "ASK"
+        case .dictionary: return "DICT"
+        case .screenSummary: return "SUMMARY"
         }
     }
 
@@ -470,6 +472,7 @@ struct ArchiveView: View {
         case .codeSummary: return "CODE"
         case .identification: return "ID"
         case .publicFigure: return "DOSSIER"
+        case .summary: return "SUMMARY"
         }
     }
 

@@ -218,10 +218,14 @@ public struct TimeConverter: Sendable {
     }
 }
 
-/// Unit and time conversions together, as shown where the pointer rests.
+/// Unit, time and cron conversions together, as shown where the pointer rests.
 public enum QuickConversions {
     public static func all(in text: String, targetLanguage: String, now: Date = Date(), timeZone: TimeZone = .current,
                            limit: Int = 3) -> [UnitConversion] {
+        // A cron line is about the schedule; its numbers are not units or dates.
+        if let cron = CronExplainer.conversion(in: text, targetLanguage: targetLanguage) {
+            return [cron]
+        }
         let units = UnitConverter.conversions(in: text, targetLanguage: targetLanguage, limit: limit)
         let times = TimeConverter(now: now, timeZone: timeZone, targetLanguage: targetLanguage).conversions(in: text, limit: limit)
         return Array((units + times).prefix(limit))
