@@ -17,7 +17,7 @@ public struct PointerSample: Sendable, Equatable {
 }
 
 /// Recognizes "circle around something" drawn with the pointer
-/// (LOCAL_AI.md LA-60). Pure geometry, so it is tested with recorded paths.
+/// (SPEC LA-60). Pure geometry, so it is tested with recorded paths.
 public struct CircleGestureRecognizer: Sendable {
     public var minimumDuration: TimeInterval = 0.25
     public var maximumDuration: TimeInterval = 4

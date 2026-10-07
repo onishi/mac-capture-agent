@@ -1,7 +1,7 @@
 import CoreServices
 import Foundation
 
-/// The Mac's built-in dictionaries via Dictionary Services (LOCAL_AI.md LA-5).
+/// The Mac's built-in dictionaries via Dictionary Services (SPEC LA-5).
 /// Works without Apple Intelligence; nothing leaves the Mac.
 struct DictionaryLookup: DictionaryLooking {
     func definition(of term: String) -> String? {

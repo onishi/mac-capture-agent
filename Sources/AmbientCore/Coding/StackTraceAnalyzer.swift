@@ -14,7 +14,7 @@ public struct StackFrame: Sendable, Equatable {
 }
 
 /// Finds the frame in the user's own code, skipping libraries and the
-/// runtime (LOCAL_AI.md LA-21). Rules only.
+/// runtime (SPEC LA-21). Rules only.
 public enum StackTraceAnalyzer {
     private static let python = CompiledPattern(#"File "([^"]+)", line (\d+)(?:, in ([\w<>.]+))?"#)
     private static let javaScript = CompiledPattern(#"at (?:([\w$.<>\[\] ]+?) \()?((?:file://)?[^\s()]+?):(\d+):\d+\)?"#)

@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-/// Watches for "hold ⌥ and circle something" (LOCAL_AI.md LA-60).
+/// Watches for "hold ⌥ and circle something" (SPEC LA-60).
 ///
 /// Polls the pointer and the modifier state with CoreGraphics, off the main
 /// thread: no event tap, so no Input Monitoring / Accessibility permission is

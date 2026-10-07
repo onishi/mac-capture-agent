@@ -6,7 +6,7 @@ public protocol ScreenSummarizing: Sendable {
     func summarize(text: String, title: String?, targetLanguage: String) async throws -> String
 }
 
-/// "Summarize this screen" (LOCAL_AI.md LA-10): the visible text of the page,
+/// "Summarize this screen" (SPEC LA-10): the visible text of the page,
 /// in reading order, condensed into up to three short lines.
 public enum ScreenSummary {
     /// Less text than this is not worth summarizing.

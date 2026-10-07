@@ -10,7 +10,7 @@ import CoreGraphics
 /// machine (release builds are 10–20× faster still), so they only fail on a
 /// real regression, such as recompiling a regex per line or allocating
 /// inside the pixel loop — both found and fixed with these tests. Real numbers come from Instruments on a Mac
-/// (docs/perf/CHECKLIST-v0.4.1.md).
+/// (docs/CHECKLIST.md).
 final class PerformanceBudgetTests: XCTestCase {
     /// Average seconds per call of `body` over `iterations`.
     private func averageSeconds(iterations: Int, _ body: () -> Void) -> Double {

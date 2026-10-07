@@ -1,6 +1,6 @@
 import Foundation
 
-/// A quantity found in text and its metric equivalent (LOCAL_AI.md LA-15).
+/// A quantity found in text and its metric equivalent (SPEC LA-15).
 public struct UnitConversion: Sendable, Equatable {
     /// The quantity as written ("72°F", "5 miles").
     public let original: String

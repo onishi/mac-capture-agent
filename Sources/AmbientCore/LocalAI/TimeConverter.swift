@@ -1,6 +1,6 @@
 import Foundation
 
-/// Times and dates in text, read for the user's time zone (LOCAL_AI.md
+/// Times and dates in text, read for the user's time zone (SPEC
 /// LA-16〜LA-18): "3pm PT" → local time, Unix timestamps and ISO 8601 →
 /// local date and time, and dates → "in 13 days (Tue)". Rules only; shown
 /// only where the pointer rests or the user circles (like unit conversion).

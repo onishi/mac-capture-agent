@@ -1,6 +1,6 @@
 # 技術構成・データ設計・プライバシー設計
 
-要件は [SPEC.md](SPEC.md)、実装状況と残作業は [ROADMAP.md](ROADMAP.md)、ローカル AI の方針とアイデアは [LOCAL_AI.md](LOCAL_AI.md)。本書は v0.11 の実装を説明し、未実装の構想は「将来案」と明記する。アプリの実機動作と性能目標は未検証。
+要件は [SPEC.md](SPEC.md)、次の作業とアイデアは [ROADMAP.md](ROADMAP.md)、実機検証は [CHECKLIST.md](CHECKLIST.md)。本書は v0.11 の実装と設計方針（ローカル AI・推定の扱い・データ・プライバシー）を説明する。アプリの実機動作と性能目標は一部未検証。
 
 **v0.11 の設計変更（D-7）**: クラウド LLM（Gemini）と通信層（`NetworkGate`）を削除し、アプリは一切通信しない。旧クラウド機能（識別・公人・作品・ニュース）は Foundation Models の知識による「推定」に置き換え、AI が使えない環境向けにルールだけで動く機能（略語の展開・単位換算・エラーのヒント）を追加した。
 
@@ -16,7 +16,8 @@
 | 言語 | NaturalLanguage（言語判定・文埋め込み・固有名詞抽出） | |
 | 翻訳 | Translation framework | macOS 26 は `TranslationSession` 直接、15 は SwiftUI ブリッジ |
 | ローカル LLM | Foundation Models（macOS 26 + Apple Intelligence） | BRIEF、用語・エラー・コードの説明、判断が割れる候補の判定、セッション名、識別・公人・作品・ニュース背景の推定（v0.11） |
-| ルール | `AmbientCore` の純粋関数 | 略語の定義の抽出（`AcronymGlossary`）、単位換算（`UnitConverter`）、エラーのヒント（`ErrorHints`）など、AI なしで動く経路 |
+| ルール | `AmbientCore` の純粋関数 | 略語の定義の抽出（`AcronymGlossary`）、単位・時刻・cron の換算（`UnitConverter` / `TimeConverter` / `CronExplainer`）、エラーのヒント（`ErrorHints` / `StackTraceAnalyzer`）など、AI なしで動く経路 |
+| 辞書 | Dictionary Services（`DCSCopyTextDefinition`） | AI がないときの用語の意味（`DictionaryLookup`） |
 | 永続化 | SQLite（GRDB 7、ROADMAP D-1 で決定） | `Sources/AmbientStore`。Linux 非対応のためテストは macOS CI |
 | ベクトル検索 | SQLite から候補を最大 2,000 件取得し、埋め込みの類似度などで再順位付け | 大規模化した場合の索引は将来案 |
 | クラウド AI | なし（v0.11 で削除、D-7） | ネットワーク Entitlement もない。WEB / WIKI はブラウザで開くだけ |
@@ -43,19 +44,44 @@ ScreenCaptureKit (5–30fps, 除外アプリと自分の HUD は画像から除�
          └→ IntelStore (表示した内容を SQLite に記録)
 ```
 
-この経路に、ポインタ滞在からの優先解析と単位換算、QR・顔の有無・秘密情報の検出、略語の学習（メモリ上）、Coding Mode の説明（LLM、無ければルールのヒント）、画面共有中の警告、端末内での識別の推定が加わる。別経路の `ActivityTracker` は前面ページを 2 秒ごとに観測し、閲覧記録・ブックマーク・作業セッションを作る。`ContextIntelCoordinator` はページ変更時に作品・ニュースのカードを判断する。
+この経路に、ポインタ滞在からの優先解析と換算、QR・顔の有無・秘密情報の検出、略語の学習（メモリ上）、Coding Mode の説明（LLM、無ければルールのヒント）、画面共有中の警告、端末内での識別の推定が加わる。ユーザーの操作から始まる経路として、⌥＋丸の `CircleGestureMonitor` → `AnalysisPipeline.lookUp(region:)`（§2.4）と、⌥⌘S の `AnalysisPipeline.summarizeScreen()` がある。別経路の `ActivityTracker` は前面ページを 2 秒ごとに観測し、閲覧記録・ブックマーク・作業セッションを作る。`ContextIntelCoordinator` はページ変更時に作品・ニュースのカードを判断する。
 
 ### 2.2 将来案
 
-字幕・Terminal などの専用領域検出、日付・金額の抽出、ページ要約・Archive への質問などのローカル LLM 機能（[LOCAL_AI.md](LOCAL_AI.md) §4）、大規模な履歴向けの検索索引は未実装。汎用 Web 検索 API は D-7 により実装しない。
+字幕・Terminal などの専用領域検出、金額の抽出、大規模な履歴向けの検索索引は未実装。ローカル AI のアイデアは ROADMAP §3 のバックログ。汎用 Web 検索 API は D-7 により実装しない。
 
-### 2.3 ローカル AI の 3 段構成（v0.11〜）
+### 2.3 ローカル AI（D-7、v0.11〜）
 
-| 段 | 中身 | 使えないときの扱い |
-| --- | --- | --- |
-| L0 ルール | `AmbientCore` の純粋関数（正規表現・表・チェックサム・換算） | 常に使える |
-| L1 オンデバイス ML | Vision / NaturalLanguage / Translation | macOS 15 以上で使える |
-| L2 オンデバイス LLM | Foundation Models（テキストのみ、`@Generable`） | 無い Mac では L0 / L1 の結果だけを出すか、何も出さない |
+**方針**
+
+1. クラウド LLM・外部 API は使わない。アプリは通信しない（WEB / WIKI はブラウザで開くだけ）。
+2. 精度より「ローカルで完結すること」を優先する。精度が低いぶん、出す条件は厳しくし、推定であることを必ず示す（§2.3.1）。
+3. 上の段が使えない Mac でも、下の段だけで何かを返す（下表）。
+4. LLM の出力は `@Generable` の値型か文字列で受け、Core のサニタイザで検査する（長さ・入力の繰り返し・空・「分からない」）。
+5. 人物は「画面に名前が書かれている公人」だけ。顔から人を特定しない。
+
+| 段 | 中身 | 動く環境 | 使えないときの扱い |
+| --- | --- | --- | --- |
+| L0 ルール | `AmbientCore` の純粋関数（正規表現・表・チェックサム・換算） | すべて（Linux でテスト可） | 常に使える |
+| L1 オンデバイス ML | Vision / NaturalLanguage / Translation / Dictionary Services | macOS 15 以上 | — |
+| L2 オンデバイス LLM | Foundation Models（テキストのみ、`@Generable`） | macOS 26 + Apple Intelligence | L0 / L1 の結果だけを出すか、何も出さない |
+
+- L2 は画像を直接見られない。画像は L1 の分類ラベル＋画面上の文字に変換してから渡すため、**画像の識別精度は低い**。
+- L2 の知識は学習時点まで。ニュースは最近の出来事を語らせず、一般的な背景だけを出し、経緯は自分が読んだ記事（Archive）から作る。
+- 呼び出しの予算: 説明・判定は 8 秒に 1 回、識別は 20 秒に 1 回まで。ユーザーの明示的な依頼（丸で囲む・⌥⌘S・Archive への質問）は予算とクールダウンの対象外。結果は `knowledge` に `source = "on-device"` でキャッシュ（見送りもキャッシュ）。
+- 将来の L3（D-8）: Core ML / MLX のローカル VLM・汎用 LLM。
+
+#### 2.3.1 推定の表示と出典
+
+| 状況 | 表示 |
+| --- | --- |
+| L0 / L1 の決定的な結果（換算・QR・翻訳） | そのまま。出典 `RULE` / `ON-DEVICE ML` |
+| L2 の推定で、名前が画面上の文字にも出ている | 名前はそのまま。出典 `ON-DEVICE AI · ESTIMATE` |
+| L2 の推定で画面上の裏付けがない | 「〜かもしれません」/「(possibly)」を付ける |
+| L2 が「分からない」と答えた、またはサニタイザで落ちた | 何も出さない（AI LOG には DECLINED / FILTERED として残る） |
+| 画像分類ラベルの確度が 0.3 未満 | L2 に渡さない |
+
+出典は `HUDMessage.source`（`IntelSource`）。種類ごとの既定があり、ルールのエラーヒント・略語の展開（`RULE`）、辞書（`DICTIONARY`）、履歴だけのニュース（`YOUR HISTORY`）は個別に設定する。
 
 識別の流れ（LA-1）:
 
@@ -66,6 +92,17 @@ ScreenCaptureKit (5–30fps, 除外アプリと自分の HUD は画像から除�
   → IdentificationPolicy.localConfidence（LLM の自己申告は信用せず、分類の確度で上限。
      名前が画面の文字にあれば断定）→ accept（0.55 以上・カテゴリ一致）→ HUD
 ```
+
+### 2.4 丸で囲んで調べる（LA-60）
+
+- `CircleGestureMonitor` が CoreGraphics でポインタと修飾キーを読む（イベントタップを使わないので、入力監視・アクセシビリティの権限は不要の見込み）。⌥ が押され、他の修飾キーとマウスボタンが押されていない間だけ 60 Hz、それ以外は約 16 Hz。
+- `CircleGestureTracker` / `CircleGestureRecognizer`（Core）が、⌥ を離した時点の 1 筆を判定する: 0.25〜4 秒、閉じている（終点付近が始点から直径の 40% 以内）、回転の合計 300〜800°、丸さ（半径のばらつき 0.4 以下、縦横比 0.35 以上）、直径 30pt〜画面の 80%。
+- `AnalysisPipeline.lookUp(region:)` が最新フレーム（メモリ上）の囲んだ範囲を OCR・分類・QR 検出し、`ActiveLookupPlanner` が当てはまる答えを集めて、ユーザーの優先順位（`FeatureSettings`）で 1 つ選ぶ。明示的な依頼なので表示しきい値とクールダウンを外し、答えが無ければ `NO INTEL` を 1.5 秒出す（P-7 の例外）。出たカードは Personalization で「検索した」（+3）。
+- 軌跡と枠は `GestureTrailController`（クリック透過のパネル。自分のウィンドウはキャプチャから除外されている）。
+
+### 2.5 機能の設定（ST-1 / ST-2）
+
+`FeatureSettings`（Core）が、オフにした機能と、HUD を取り合う 10 機能の順位を持つ。`select(from:)` は表示しきい値を超えた候補の中で順位が最も高いものを選ぶ（しきい値未満を順位で引き上げない）。候補が無いときの補助（換算・QR・キャスト・識別）と、丸で囲んだときの選択にも同じ順位を使う。
 
 ---
 
@@ -78,7 +115,8 @@ ScreenCaptureKit (5–30fps, 除外アプリと自分の HUD は画像から除�
 | Capture | `ScreenCaptureManager`, `FrameBuffer`, `FrameConverter` | `WindowTracker`（ウィンドウ単位の対象指定） |
 | Vision | `ChangeDetector`, `AnalysisScheduler`, `OCRService`, `ImageClassifier`（カテゴリとラベル）, `TextBlockGrouper`, `FaceDetector`, QR 検出 | 字幕・Terminal などの専用領域検出 |
 | Intelligence | `AIRouter`, `InterestScorer`, `AppleIntelligenceReasoner`, `ErrorDetector`, `ErrorHints`, `TermExtractor`, `AnalysisPipeline` | より細かい領域・文脈の判定 |
-| Local AI | `LocalKnowledgeReasoner`（`AppleIntelligenceReasoner` の拡張: `VisualIdentifying` / `MediaResearching`）、Core の `VisualLabelSelector` / `IdentificationPolicy` / `AcronymGlossary` / `UnitConverter`。`AIProvider` / `LocalAIProvider` は別の抽象化として存在 | ページ要約・Archive への質問など（LOCAL_AI.md §4） |
+| Local AI | `LocalKnowledgeReasoner`（`AppleIntelligenceReasoner` の拡張: 識別・作品・ニュース・「これは何？」・画面の要約・Archive への質問）、Core の `VisualLabelSelector` / `IdentificationPolicy` / `AcronymGlossary` / `UnitConverter` / `TimeConverter` / `ArchiveQuestion` / `ScreenSummary`。`AIProvider` / `LocalAIProvider` は別の抽象化として存在 | ROADMAP §3 |
+| Interaction | `CircleGestureMonitor`, `GestureTrailController`, Core の `CircleGestureRecognizer` / `ActiveLookupPlanner`, `GlobalHotKey`（⌥⌘K / ⌥⌘S） | 丸以外のジェスチャ（LA-61） |
 | Context | `ActivityTracker`, `ContextIntelCoordinator`, `MediaContext`, `BrowserURLProvider` | スクロール速度などの活用 |
 | Memory | `IntelStore` / `IntelDatabase`（GRDB）、`VisualMemoryIndex`, `NLTextEmbedding` | 大規模データ向けの索引 |
 | Privacy | `PrivacyPolicy`, `PrivacyManager`, `SensitiveDataDetector`, `ScreenShareMonitor`, `RedactionOverlayController` | 共有中の黒塗りの実機検証 |
@@ -131,7 +169,7 @@ Foundation Models では `@Generable` の構造体で受け取り、JSON 文字�
 ### 4.4 Translation
 
 - 言語モデルの自動ダウンロードはしない（未インストール時は何も表示しない）。
-- macOS 15 のブリッジ方式は実機で要確認（ROADMAP M0）。
+- macOS 15 のブリッジ方式は実機で要確認（CHECKLIST.md）。
 
 ### 4.5 プロバイダの抽象化
 

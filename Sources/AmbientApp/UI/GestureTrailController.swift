@@ -10,7 +10,7 @@ final class GestureTrailState: ObservableObject {
 }
 
 /// Draws the ⌥-circle stroke and a short lock-on on a click-through panel
-/// (LOCAL_AI.md LA-60). Excluded from capture like the other HUD panels.
+/// (SPEC LA-60). Excluded from capture like the other HUD panels.
 @MainActor
 final class GestureTrailController {
     private let panel: NSPanel

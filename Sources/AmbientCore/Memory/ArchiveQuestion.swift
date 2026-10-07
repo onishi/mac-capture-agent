@@ -24,7 +24,7 @@ public protocol ArchiveAnswering: Sendable {
     func answer(question: String, evidence: [ArchiveEvidence], targetLanguage: String) async throws -> String
 }
 
-/// "Ask the archive" (LOCAL_AI.md LA-30): a local RAG that answers only from
+/// "Ask the archive" (SPEC LA-30): a local RAG that answers only from
 /// what the user's own archive contains.
 public enum ArchiveQuestion {
     public static let maximumEvidence = 8

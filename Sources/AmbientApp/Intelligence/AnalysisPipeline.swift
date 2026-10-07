@@ -73,7 +73,7 @@ actor AnalysisPipeline {
     private let faceDetector = FaceDetector()
     /// On-device identification is slower than the other LLM uses; at most every 20 s.
     private var identifyLimiter = RateLimiter(minimumInterval: 20)
-    /// Abbreviations defined on screen (memory only, LOCAL_AI.md LA-6).
+    /// Abbreviations defined on screen (memory only, SPEC LA-6).
     private var glossary = AcronymGlossary()
     /// Where the pointer last rested outside Coding Mode (for unit conversion).
     private var lastDwell: (region: CGRect, timestamp: TimeInterval)?
@@ -476,7 +476,7 @@ actor AnalysisPipeline {
     // MARK: Coding Mode
 
     /// Explains an error seen in a terminal / IDE / GitHub.
-    /// The on-device LLM first; canned rules (LOCAL_AI.md LA-20) when it is
+    /// The on-device LLM first; canned rules (SPEC LA-20) when it is
     /// unavailable, busy or gives nothing usable.
     private func explainError(_ candidate: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval,
                               explicit: Bool = false) async -> IntelOutcome {
@@ -584,7 +584,7 @@ actor AnalysisPipeline {
         return CGPoint(x: (location.x - bounds.minX) / bounds.width, y: (location.y - bounds.minY) / bounds.height)
     }
 
-    // MARK: On-device identification (LOCAL_AI.md LA-1 / LA-2)
+    // MARK: On-device identification (SPEC LA-1 / LA-2)
 
     /// Animals / plants / landmarks / dishes / products from the classifier's
     /// labels and nearby text, or a public figure named on screen next to a
@@ -715,7 +715,7 @@ actor AnalysisPipeline {
         return .shown
     }
 
-    // MARK: Circle to look up (LOCAL_AI.md LA-60)
+    // MARK: Circle to look up (SPEC LA-60)
 
     /// The user circled `region` (normalized, top-left origin) on the captured
     /// display. An explicit request: the ignore-first threshold and cooldowns
@@ -847,7 +847,7 @@ actor AnalysisPipeline {
         }
     }
 
-    // MARK: Summarize the screen (LOCAL_AI.md LA-10)
+    // MARK: Summarize the screen (SPEC LA-10)
 
     /// On request (⌥⌘S): the visible text of the latest frame, in reading
     /// order and without secrets, condensed into up to three lines by the
@@ -910,7 +910,7 @@ actor AnalysisPipeline {
         }
     }
 
-    // MARK: Unit conversion (LOCAL_AI.md LA-15)
+    // MARK: Unit conversion (SPEC LA-15)
 
     /// Imperial quantities, times in other zones, timestamps and dates in the
     /// text under a resting pointer, converted for the user (LA-15〜LA-18).
@@ -1060,7 +1060,7 @@ actor AnalysisPipeline {
     /// Explains a technical term: Knowledge Cache first, then the on-device LLM,
     /// which may also decide the term is not worth explaining (cached too).
     /// Without the LLM, an abbreviation defined earlier on screen is expanded
-    /// from the in-memory glossary (LOCAL_AI.md LA-6).
+    /// from the in-memory glossary (SPEC LA-6).
     private func explainTerm(_ candidate: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval,
                              explicit: Bool = false) async -> IntelOutcome {
         guard let term = candidate.payload else { return .discarded }

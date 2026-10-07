@@ -1,6 +1,6 @@
 import Foundation
 
-/// Explains cron schedules in plain words (LOCAL_AI.md LA-22). Rules only;
+/// Explains cron schedules in plain words (SPEC LA-22). Rules only;
 /// common shapes are described, anything else is left alone (nil).
 public enum CronExplainer {
     /// Five whitespace-separated cron fields with at least one "*" or "/", or a macro.

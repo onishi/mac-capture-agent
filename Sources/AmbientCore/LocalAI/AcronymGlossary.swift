@@ -13,7 +13,7 @@ public struct AcronymDefinition: Sendable, Equatable {
 
 /// Learns abbreviations from definitions written on screen and recalls them
 /// when the abbreviation shows up again elsewhere — no language model needed
-/// (LOCAL_AI.md LA-6). Kept in memory only, bounded, never written to disk.
+/// (SPEC LA-6). Kept in memory only, bounded, never written to disk.
 public struct AcronymGlossary: Sendable {
     public let capacity: Int
     private var entries: [String: AcronymDefinition] = [:]

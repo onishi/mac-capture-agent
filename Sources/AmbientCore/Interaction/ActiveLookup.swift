@@ -1,6 +1,6 @@
 import Foundation
 
-/// What to show for an area the user circled (LOCAL_AI.md LA-60). The user
+/// What to show for an area the user circled (SPEC LA-60). The user
 /// asked explicitly, so the ignore-first threshold and cooldowns do not apply;
 /// the most specific thing found wins.
 public enum ActiveLookupPlan: Sendable, Equatable {

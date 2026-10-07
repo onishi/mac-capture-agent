@@ -4,7 +4,7 @@ import FoundationModels
 #endif
 
 /// Identification and media / news knowledge from the on-device model's own
-/// knowledge (LOCAL_AI.md LA-1〜LA-4). Replaces the former cloud provider:
+/// knowledge (SPEC LA-1〜LA-4). Replaces the former cloud provider:
 /// nothing leaves the Mac. The model reads text only (classification labels,
 /// names and titles), so every answer is treated as an estimate.
 extension AppleIntelligenceReasoner: VisualIdentifying, MediaResearching {

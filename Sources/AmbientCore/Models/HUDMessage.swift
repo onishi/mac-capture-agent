@@ -3,7 +3,7 @@ import Foundation
 import CoreGraphics
 #endif
 
-/// Where a HUD message came from (LOCAL_AI.md LA-51), shown on the card so
+/// Where a HUD message came from (SPEC LA-51), shown on the card so
 /// estimates by the on-device model are never mistaken for facts.
 public enum IntelSource: String, Sendable, Codable {
     /// Deterministic rules (conversions, error hints, abbreviations defined on screen).

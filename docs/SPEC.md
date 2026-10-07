@@ -2,7 +2,7 @@
 
 > macOS 常時画面解析 AI アプリ — 「Mac の画面そのものに、知性のレイヤーを追加する」
 
-- 文書の位置づけ: 製品要件の正本（Single Source of Truth）。実装方法は [ARCHITECTURE.md](ARCHITECTURE.md)、順序と計画は [ROADMAP.md](ROADMAP.md)、ローカル AI の設計とアイデア一覧は [LOCAL_AI.md](LOCAL_AI.md) を参照。
+- 文書の位置づけ: 製品要件の正本（Single Source of Truth）。実装方法と設計方針は [ARCHITECTURE.md](ARCHITECTURE.md)、次の作業とアイデアのバックログは [ROADMAP.md](ROADMAP.md)、実機検証は [CHECKLIST.md](CHECKLIST.md)、利用者向けの説明は [MANUAL.md](MANUAL.md)。
 - **2026-10 の方針変更（ROADMAP D-7）**: クラウド LLM（Gemini）を廃止し、すべてをローカル（ルール・Apple のオンデバイス ML・Foundation Models）で行う。精度が下がることは許容し、推定であることを表示する。
 - 要件 ID は変更しない（廃止時は「廃止」と明記して残す）。
 - 状態の凡例: ✅ 実装済み / 🟡 一部実装 / ⬜ 未着手 / ⛔ 方針として実装しない
@@ -199,7 +199,7 @@ macOS 上でユーザーが見ている画面を継続的に観察し、AI が�
 
 ### 3.13.2 ローカル AI（v0.11〜、M6）
 
-アイデアの全一覧（LA-1〜LA-53）と優先度は [LOCAL_AI.md](LOCAL_AI.md) §4。ここには着手済みのものだけを載せる。
+実装済み・着手済みのもの。未着手のアイデアは ROADMAP §3 のバックログ。方針（3 段構成・推定の表示）は ARCHITECTURE §2.3。
 
 | ID | 要件 | 状態 | 備考 |
 | --- | --- | --- | --- |
@@ -237,7 +237,7 @@ macOS 上でユーザーが見ている画面を継続的に観察し、AI が�
 | FU-2 | Audio Intelligence（外国語音声の翻訳・楽曲名・セリフ・会議の用語補足） | ⬜ |
 | FU-3 | Voice Interaction（「これ誰？」→ ポインタ付近を解析） | ⬜ |
 | FU-4 | AI からの問いかけ（「この用語は今後説明しませんか？」） | ⬜ |
-| FU-5 | ジェスチャで頼む（⌥ を押しながら丸で囲む → その範囲を調べる。LA-60 / LA-61、設計は [CAPABILITIES.md](CAPABILITIES.md) §2.1） | 🟡 丸で囲む（LA-60）のみ実装。ほかのジェスチャ（LA-61）は未着手 |
+| FU-5 | ジェスチャで頼む（⌥ を押しながら丸で囲む → その範囲を調べる。LA-60 / LA-61、設計は ARCHITECTURE §2.4） | 🟡 丸で囲む（LA-60）のみ実装。ほかのジェスチャ（LA-61）は未着手 |
 
 ---
 
@@ -263,7 +263,7 @@ macOS 上でユーザーが見ている画面を継続的に観察し、AI が�
 
 | ID | 項目 | 目標 | 状態 |
 | --- | --- | --- | --- |
-| NF-1 | 通常時 CPU | 5% 未満 | 未計測（v0.5 で Debug overlay と Signpost を追加。docs/perf/CHECKLIST-v0.4.1.md）。v0.10 で正規表現の事前コンパイルと縮小処理のアロケーション削減（Linux のデバッグビルドでエラー検出 1/8、秘密情報検出 1/15、5K 縮小 1/2 以下） |
+| NF-1 | 通常時 CPU | 5% 未満 | 未計測（v0.5 で Debug overlay と Signpost を追加。docs/CHECKLIST.md）。v0.10 で正規表現の事前コンパイルと縮小処理のアロケーション削減（Linux のデバッグビルドでエラー検出 1/8、秘密情報検出 1/15、5K 縮小 1/2 以下） |
 | NF-2 | 通常時メモリ | 500MB 未満 | 未計測 |
 | NF-3 | 解析による UI 遅延 | なし（解析はすべてメインスレッド外） | ✅ 設計上 |
 | NF-4 | HUD 初回表示 | 変化から 1〜3 秒以内 | 未計測 |

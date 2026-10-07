@@ -1,7 +1,7 @@
 import Foundation
 
 /// Canned causes and next steps for common errors, used when the on-device
-/// model is unavailable or gives nothing usable (LOCAL_AI.md LA-20). Rules only.
+/// model is unavailable or gives nothing usable (SPEC LA-20). Rules only.
 public enum ErrorHints {
     private struct Hint {
         let pattern: CompiledPattern

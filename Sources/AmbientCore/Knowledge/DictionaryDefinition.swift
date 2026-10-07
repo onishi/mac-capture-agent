@@ -5,7 +5,7 @@ public protocol DictionaryLooking: Sendable {
     func definition(of term: String) -> String?
 }
 
-/// Turns a raw dictionary entry into one short line for the HUD (LOCAL_AI.md LA-5).
+/// Turns a raw dictionary entry into one short line for the HUD (SPEC LA-5).
 public enum DictionaryDefinition {
     public static let maximumLength = 160
 

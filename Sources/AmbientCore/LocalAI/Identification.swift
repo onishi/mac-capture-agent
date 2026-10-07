@@ -2,7 +2,7 @@ import Foundation
 
 /// On-device identification (Foundation Models in the app). The local model
 /// reads text only: Vision's classification labels and the words near the
-/// image stand in for the picture, so answers are estimates (LOCAL_AI.md §2.1).
+/// image stand in for the picture, so answers are estimates (ARCHITECTURE.md §2.3.1).
 public protocol VisualIdentifying: Sendable {
     var isAvailable: Bool { get }
     func identify(labels: [VisualLabel], hint: VisualCategory, context: String, targetLanguage: String) async throws -> IdentificationAnswer

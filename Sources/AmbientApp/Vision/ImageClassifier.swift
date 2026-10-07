@@ -3,7 +3,7 @@ import Foundation
 import Vision
 
 /// Result of one classification: coarse categories for the router and the
-/// raw labels for on-device identification (LOCAL_AI.md LA-1).
+/// raw labels for on-device identification (SPEC LA-1).
 struct ImageClassification: Sendable {
     var categories: [VisualCategory] = []
     var labels: [VisualLabel] = []
