@@ -138,8 +138,8 @@ public struct SensitiveDataDetector: Sendable {
     /// 12 digits with a valid check digit, either written as 4-4-4 groups or
     /// next to a keyword ("マイナンバー", "個人番号", "My Number") — a bare
     /// 12-digit number with a matching check digit is too common to flag.
-    private static let myNumberGrouped = CompiledPattern(#"(?<!\d)\d{4}[ \-]\d{4}[ \-]\d{4}(?!\d)"#)
-    private static let myNumberPlain = CompiledPattern(#"(?<!\d)\d{12}(?!\d)"#)
+    private static let myNumberGrouped = CompiledPattern(#"(?<!\d[ \-]?)\d{4}[ \-]\d{4}[ \-]\d{4}(?![ \-]?\d)"#)
+    private static let myNumberPlain = CompiledPattern(#"(?<!\d[ \-]?)\d{12}(?![ \-]?\d)"#)
     private static let myNumberKeyword = CompiledPattern(#"マイナンバー|個人番号|(?i:my\s?number|individual number)"#)
 
     func containsMyNumber(_ text: String) -> Bool {

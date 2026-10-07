@@ -75,6 +75,7 @@ final class MyNumberTests: XCTestCase {
         XCTAssertFalse(detector.kinds(in: "注文番号 123456789018").contains(.myNumber), "a bare 12-digit number needs a keyword")
         XCTAssertFalse(detector.kinds(in: "1234 5678 9012").contains(.myNumber), "wrong check digit")
         XCTAssertFalse(detector.kinds(in: "0000 0000 0000").contains(.myNumber))
+        XCTAssertFalse(detector.kinds(in: "4111 1111 1111 111").contains(.myNumber), "part of a longer number")
         XCTAssertTrue(SensitiveKind.myNumber.isHighSeverity)
     }
 }
