@@ -1,4 +1,4 @@
-# 実機検証チェックリスト（v0.4.1）
+# 実機検証チェックリスト（v0.4.1〜v0.10）
 
 ROADMAP M0 の完了条件。結果欄に ✅ / ❌ / ⚠（既知の制限として記載）とメモを記入し、❌ は再現手順を Issue かこのファイルに残す。
 
@@ -23,7 +23,7 @@ ROADMAP M0 の完了条件。結果欄に ✅ / ❌ / ⚠（既知の制限と�
 
 | # | 手順 | 期待結果 | 結果 |
 | --- | --- | --- | --- |
-| 1.1 | 初回起動 | 画面収録の許可ダイアログ。メニューに「Screen Recording permission required」 | |
+| 1.1 | 初回起動 | FIELD MANUAL が開く。画面収録の許可前は Start が押せず、メニューに「Screen Recording permission required」 | |
 | 1.2 | 許可してアプリを再起動 | アイコンが照準になり、メニューに `Running` | |
 | 1.3 | 再ビルドして起動 | 権限が保持されている（Team 設定時） | |
 
@@ -61,7 +61,7 @@ ROADMAP M0 の完了条件。結果欄に ✅ / ❌ / ⚠（既知の制限と�
 | 4.2 | Pause Until Tomorrow | メニューに「Paused until tomorrow 6:00」 | |
 | 4.3 | 1Password を前面に | 解析が止まる（デバッグ表示が更新されない、ログ `Analysis skipped`） | |
 | 4.4 | パスワード変更ページ（タイトルに Password） | 解析されない | |
-| 4.5 | コンテナ内を確認 `~/Library/Containers/com.onishi.AmbientScreenIntelligence/Data` | 画像ファイルが無い。`visual-memory.json` のみ | |
+| 4.5 | コンテナ内を確認 `~/Library/Containers/com.onishi.AmbientScreenIntelligence/Data` | 画像ファイルが無い。記録は `intel.sqlite`（および SQLite の一時ファイル）に保存される。旧 `visual-memory.json` は移行後に削除される | |
 
 ## 5. BRIEF と Archive
 
@@ -88,3 +88,13 @@ ROADMAP M0 の完了条件。結果欄に ✅ / ❌ / ⚠（既知の制限と�
 | HUD 初回表示までの時間 | 1〜3 秒 | |
 | デバッグ表示の `HUD` 件数のうち「出てほしくなかった」件数 | 1 件以下 | |
 | デバッグ表示の処理時間（OCR / TRANSLATE の典型値） | 記録のみ | |
+
+## 8. ローカライズとアクセシビリティ（v0.10）
+
+| # | 手順 | 期待結果 | 結果 |
+| --- | --- | --- | --- |
+| 8.1 | システム言語を日本語にして起動 | メニュー・設定・FIELD MANUAL が日本語になる | |
+| 8.2 | システム言語を英語にして起動 | 同じ画面が英語になる | |
+| 8.3 | VoiceOver をオンにして HUD を表示 | 内容が一度だけ読み上げられる | |
+| 8.4 | 「視差効果を減らす」をオンにして HUD を表示 | 解読演出とスイープが省略される | |
+| 8.5 | Finder・設定画面・通知を確認 | アプリアイコンが表示される | |
