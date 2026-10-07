@@ -122,7 +122,7 @@ macOS 15 以降は定期的に「画面収録を継続して許可しますか�
   - **公人・作品・ニュース**: 画面に書かれた人名、動画のタイトル、ニュースの見出しから、端末内の LLM の知識で推定（有名な人・作品のみ）。ニュースは最近の出来事を語らせず、一般的な背景と、自分が過去 30 日に読んだ関連記事を表示
   - **略語の展開（AI 不要）**: 画面に「Retrieval-Augmented Generation (RAG)」のような定義が出たら覚えておき、別の場所で RAG を見たときに展開を表示（メモリ上のみ、最大 300 件）
   - **単位換算（AI 不要）**: マイル・°F・フィート・インチ・ポンド・オンス・ガロンなどにポインタを 2 秒置くと `INTEL // CONVERSION` でメートル法に換算（翻訳先が英語のときは出さない）
-  - **エラーのヒント（AI 不要）**: Apple Intelligence が無い・失敗したときも、ModuleNotFoundError・EADDRINUSE・command not found・merge conflict など 24 種類に定型の原因と次の一手
+  - **エラーのヒント（AI 不要）**: Apple Intelligence が無い・失敗したときも、ModuleNotFoundError・EADDRINUSE・command not found・merge conflict など 25 種類に定型の原因と次の一手
 
 - **メニューバー常駐アプリ**（`LSUIElement`、SwiftUI App + AppKit `NSStatusItem`）
 - **Screen Capture**: `SCStream` でメインディスプレイを取得。自分自身の HUD と除外アプリのウィンドウはキャプチャ画像から除去

@@ -47,7 +47,7 @@ TEAM_ID=ABCDE12345 NOTARY_PROFILE=ambient ./scripts/release.sh
 - [ROADMAP.md](ROADMAP.md) §5 の実機チェックリストをすべて通す
 - 別の Mac（開発環境のないユーザーアカウント）で DMG を開き、Gatekeeper の警告なしに起動できる
 - 画面収録の許可 → 再起動 → `Running` まで、ガイドどおりに進める
-- 初回起動時と Gemini オフの状態で通信が発生しないこと（docs/ の通信確認手順）
+- 初回起動時と通常の利用で通信が発生しないこと（v0.11 からネットワークの Entitlement なし）
 
 ## 注意
 

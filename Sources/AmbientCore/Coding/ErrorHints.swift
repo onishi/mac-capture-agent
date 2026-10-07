@@ -52,7 +52,12 @@ public enum ErrorHints {
         hint(#"Index out of range|IndexError|index out of bounds"#,
              ja: ("配列の範囲外の要素にアクセスしています", "要素数とループの範囲を確認"),
              en: ("An element outside the array is accessed", "Check the count and the loop bounds")),
-        hint(#"command not found: (\S+)|(?:^|\s)(?:bash: )?([^\s:]+): command not found"#,
+        // zsh: "zsh: command not found: pnpm" (checked first: the bash form would capture "zsh").
+        hint(#"command not found: (\S+)"#,
+             ja: ("コマンド $1 が見つかりません（未インストールか PATH にない）", "インストールするか PATH を確認"),
+             en: ("The command $1 is not found (not installed or not on PATH)", "Install it or check PATH")),
+        // bash: "bash: pnpm: command not found".
+        hint(#"([^\s:]+): command not found"#,
              ja: ("コマンド $1 が見つかりません（未インストールか PATH にない）", "インストールするか PATH を確認"),
              en: ("The command $1 is not found (not installed or not on PATH)", "Install it or check PATH")),
         hint(#"Permission denied \(publickey\)"#,
