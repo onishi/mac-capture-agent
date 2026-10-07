@@ -5,13 +5,22 @@ enum ArchiveTab: String, CaseIterable {
     case records = "RECORDS"
     case sessions = "SESSIONS"
     case today = "TODAY"
+    case aiLog = "AI LOG"
 }
 
 @MainActor
 final class ArchiveViewModel: ObservableObject {
     @Published var tab: ArchiveTab = .records {
-        didSet { if tab != .records { refreshSessions() } }
+        didSet {
+            switch tab {
+            case .records: refresh()
+            case .sessions, .today: refreshSessions()
+            case .aiLog: refreshAILog()
+            }
+        }
     }
+    /// The on-device LLM's answers, newest first (SPEC AL-1).
+    @Published private(set) var aiAnswers: [AIAnswerRecord] = []
     @Published private(set) var sessions: [WorkSessionRecord] = []
     @Published private(set) var themes: [DailySummary.Theme] = []
     @Published var query = ""
@@ -40,7 +49,10 @@ final class ArchiveViewModel: ObservableObject {
         queryObservation = $query
             .removeDuplicates()
             .debounce(for: .milliseconds(220), scheduler: RunLoop.main)
-            .sink { [weak self] _ in self?.refresh() }
+            .sink { [weak self] _ in
+                guard let self else { return }
+                if self.tab == .aiLog { self.refreshAILog() } else { self.refresh() }
+            }
     }
 
     func refresh() {
@@ -83,6 +95,34 @@ final class ArchiveViewModel: ObservableObject {
         }
     }
 
+    func refreshAILog() {
+        let store = self.store
+        let query = self.query
+        Task { [weak self] in
+            let answers = await store.aiAnswers(matching: query, limit: 300)
+            self?.aiAnswers = answers
+        }
+    }
+
+    /// Copies the answer text.
+    func copy(_ answer: AIAnswerRecord) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(answer.answer, forType: .string)
+        copiedID = answer.id
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1.2))
+            if self?.copiedID == answer.id { self?.copiedID = nil }
+        }
+    }
+
+    func clearAILog() {
+        let store = self.store
+        Task { [weak self] in
+            await store.removeAIAnswers()
+            self?.refreshAILog()
+        }
+    }
+
     func openPage(_ url: URL) {
         NSWorkspace.shared.open(url)
     }
@@ -92,6 +132,7 @@ final class ArchiveViewModel: ObservableObject {
         Task { [weak self] in
             await store.removeAll()
             self?.refresh()
+            self?.refreshAILog()
         }
     }
 }

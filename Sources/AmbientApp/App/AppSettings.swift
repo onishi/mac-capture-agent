@@ -28,6 +28,8 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         static let localKnowledge = "localKnowledgeEnabled"
         static let unitConversion = "unitConversionEnabled"
         static let circleLookup = "circleLookupEnabled"
+        static let features = "featureSettings"
+        static let aiLog = "aiLogEnabled"
         static let publicFigures = "publicFigureEnabled"
         static let mediaMode = "mediaModeEnabled"
         static let newsMode = "newsModeEnabled"
@@ -68,11 +70,6 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         didSet { defaults.set(followMouseDisplay, forKey: Key.followMouseDisplay) }
     }
 
-    /// One-line context notes from Apple Intelligence (on-device), when available.
-    @Published var briefingEnabled: Bool {
-        didSet { defaults.set(briefingEnabled, forKey: Key.briefing) }
-    }
-
     /// Archive surfaced intel (text only) for later search.
     @Published var memoryEnabled: Bool {
         didSet { defaults.set(memoryEnabled, forKey: Key.memory) }
@@ -81,14 +78,6 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         didSet { defaults.set(memoryRetentionDays, forKey: Key.memoryRetention) }
     }
     static let retentionChoices = [1, 7, 30]
-    /// Term explanations and LLM judgement of borderline text (Apple Intelligence).
-    @Published var reasoningEnabled: Bool {
-        didSet { defaults.set(reasoningEnabled, forKey: Key.reasoning) }
-    }
-    /// Warn when secrets appear on screen while it is being shared.
-    @Published var warnSensitiveWhileSharing: Bool {
-        didSet { defaults.set(warnSensitiveWhileSharing, forKey: Key.warnSensitive) }
-    }
     /// Experimental: cover secrets with opaque boxes while sharing.
     @Published var redactWhileSharing: Bool {
         didSet { defaults.set(redactWhileSharing, forKey: Key.redact) }
@@ -109,29 +98,30 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
     @Published var resumeEnabled: Bool {
         didSet { defaults.set(resumeEnabled, forKey: Key.resume) }
     }
-    /// On-device identification and knowledge (estimates; Apple Intelligence + image classification).
-    @Published var localKnowledgeEnabled: Bool {
-        didSet { defaults.set(localKnowledgeEnabled, forKey: Key.localKnowledge) }
+    /// Which kinds of intel are on, and which win when several could be shown (SPEC ST-1/ST-2).
+    @Published var features: FeatureSettings {
+        didSet {
+            if let data = try? JSONEncoder().encode(features) { defaults.set(data, forKey: Key.features) }
+        }
     }
-    /// Convert imperial quantities where the pointer rests.
-    @Published var unitConversionEnabled: Bool {
-        didSet { defaults.set(unitConversionEnabled, forKey: Key.unitConversion) }
+    /// Keep every on-device LLM answer for review in the archive's AI LOG (SPEC AL-1).
+    @Published var aiLogEnabled: Bool {
+        didSet { defaults.set(aiLogEnabled, forKey: Key.aiLog) }
     }
-    /// Hold ⌥ and circle something to look it up (LOCAL_AI.md LA-60).
-    @Published var circleLookupEnabled: Bool {
-        didSet { defaults.set(circleLookupEnabled, forKey: Key.circleLookup) }
+
+    /// A binding-friendly view of one feature's switch.
+    func isEnabled(_ feature: IntelFeature) -> Bool { features.isEnabled(feature) }
+
+    func setEnabled(_ feature: IntelFeature, _ enabled: Bool) {
+        features.set(feature, enabled: enabled)
     }
-    /// Look up public figures whose names appear on screen (text only).
-    @Published var publicFigureEnabled: Bool {
-        didSet { defaults.set(publicFigureEnabled, forKey: Key.publicFigures) }
+
+    func move(_ feature: IntelFeature, up: Bool) {
+        features.move(feature, up: up)
     }
-    /// Movie / Anime mode: work card and cast on screen.
-    @Published var mediaModeEnabled: Bool {
-        didSet { defaults.set(mediaModeEnabled, forKey: Key.mediaMode) }
-    }
-    /// News mode: background of the story being read.
-    @Published var newsModeEnabled: Bool {
-        didSet { defaults.set(newsModeEnabled, forKey: Key.newsMode) }
+
+    func resetFeatureOrder() {
+        features.resetOrder()
     }
     @Published var spoilerLevel: SpoilerLevel {
         didSet { defaults.set(spoilerLevel.rawValue, forKey: Key.spoiler) }
@@ -159,26 +149,44 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         skippedLanguages = Set(defaults.stringArray(forKey: Key.skippedLanguages) ?? [])
         hudPosition = defaults.string(forKey: Key.hudPosition).flatMap(HUDPosition.init(rawValue:)) ?? .nearTarget
         followMouseDisplay = defaults.bool(forKey: Key.followMouseDisplay)
-        briefingEnabled = defaults.object(forKey: Key.briefing) as? Bool ?? true
         memoryEnabled = defaults.object(forKey: Key.memory) as? Bool ?? true
         let retention = defaults.integer(forKey: Key.memoryRetention)
         memoryRetentionDays = Self.retentionChoices.contains(retention) ? retention : 7
         debugOverlay = defaults.bool(forKey: Key.debugOverlay)
-        reasoningEnabled = defaults.object(forKey: Key.reasoning) as? Bool ?? true
-        warnSensitiveWhileSharing = defaults.object(forKey: Key.warnSensitive) as? Bool ?? true
         redactWhileSharing = defaults.bool(forKey: Key.redact)
         pretendScreenSharing = defaults.bool(forKey: Key.pretendSharing)
         pageTrackingEnabled = defaults.object(forKey: Key.pageTracking) as? Bool ?? true
         readBrowserURLs = defaults.object(forKey: Key.browserURLs) as? Bool ?? true
         resumeEnabled = defaults.object(forKey: Key.resume) as? Bool ?? true
-        localKnowledgeEnabled = defaults.object(forKey: Key.localKnowledge) as? Bool ?? true
-        unitConversionEnabled = defaults.object(forKey: Key.unitConversion) as? Bool ?? true
-        circleLookupEnabled = defaults.object(forKey: Key.circleLookup) as? Bool ?? true
-        publicFigureEnabled = defaults.object(forKey: Key.publicFigures) as? Bool ?? true
-        mediaModeEnabled = defaults.object(forKey: Key.mediaMode) as? Bool ?? true
-        newsModeEnabled = defaults.object(forKey: Key.newsMode) as? Bool ?? true
+        features = Self.loadFeatures(from: defaults)
+        aiLogEnabled = defaults.object(forKey: Key.aiLog) as? Bool ?? true
         spoilerLevel = (defaults.object(forKey: Key.spoiler) as? Int).flatMap(SpoilerLevel.init(rawValue:)) ?? .uptoCurrent
         onboardingCompleted = defaults.bool(forKey: Key.onboardingCompleted)
+    }
+
+    /// Stored feature settings, or — on first launch of v0.11+ — the old
+    /// individual switches carried over (an explicit "off" stays off).
+    private static func loadFeatures(from defaults: UserDefaults) -> FeatureSettings {
+        if let data = defaults.data(forKey: Key.features),
+           let stored = try? JSONDecoder().decode(FeatureSettings.self, from: data) {
+            return stored
+        }
+        let legacy: [(String, [IntelFeature])] = [
+            (Key.briefing, [.briefing]),
+            (Key.reasoning, [.termExplanation, .llmRouter]),
+            (Key.warnSensitive, [.sensitiveWarning]),
+            (Key.localKnowledge, [.identification]),
+            (Key.unitConversion, [.unitConversion]),
+            (Key.circleLookup, [.circleLookup]),
+            (Key.publicFigures, [.publicFigure]),
+            (Key.mediaMode, [.mediaCard, .castOnScreen]),
+            (Key.newsMode, [.newsBackground])
+        ]
+        var settings = FeatureSettings.default
+        for (key, features) in legacy where (defaults.object(forKey: key) as? Bool) == false {
+            features.forEach { settings.set($0, enabled: false) }
+        }
+        return settings
     }
 
     // MARK: Personalization (aggregated weights only, never screen content)
@@ -209,14 +217,10 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
             performanceMode: performanceMode,
             imageClassificationEnabled: imageClassificationEnabled,
             privacyPolicy: PrivacyPolicy(excludedBundleIdentifiers: excludedBundleIdentifiers),
-            briefingEnabled: briefingEnabled,
             memoryEnabled: memoryEnabled,
-            reasoningEnabled: reasoningEnabled,
-            warnSensitiveWhileSharing: warnSensitiveWhileSharing,
+            features: features,
+            aiLogEnabled: memoryEnabled && aiLogEnabled,
             redactWhileSharing: redactWhileSharing,
-            localKnowledgeEnabled: localKnowledgeEnabled,
-            unitConversionEnabled: unitConversionEnabled,
-            publicFigureEnabled: publicFigureEnabled,
             debugOverlay: debugOverlay
         )
     }

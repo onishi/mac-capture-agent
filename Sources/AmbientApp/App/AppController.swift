@@ -222,11 +222,12 @@ final class AppController: ObservableObject {
 
     private static func contextConfiguration(for settings: AppSettings) -> ContextIntelCoordinator.Configuration {
         ContextIntelCoordinator.Configuration(
-            mediaEnabled: settings.mediaModeEnabled,
-            newsEnabled: settings.newsModeEnabled,
+            mediaEnabled: settings.isEnabled(.mediaCard),
+            newsEnabled: settings.isEnabled(.newsBackground),
             spoilerLevel: settings.spoilerLevel,
             targetLanguage: settings.targetLanguage,
-            memoryEnabled: settings.memoryEnabled
+            memoryEnabled: settings.memoryEnabled,
+            aiLogEnabled: settings.memoryEnabled && settings.aiLogEnabled
         )
     }
 
@@ -441,7 +442,7 @@ final class AppController: ObservableObject {
 
     /// Runs the ⌥-circle monitor while a pipeline runs and the feature is on.
     private func updateGestureMonitor() {
-        let shouldRun = settings.circleLookupEnabled && currentPipeline != nil && runningDisplayID != nil
+        let shouldRun = settings.isEnabled(.circleLookup) && currentPipeline != nil && runningDisplayID != nil
         guard shouldRun != gestureMonitorRunning else { return }
         gestureMonitorRunning = shouldRun
         guard shouldRun, let pipeline = currentPipeline, let displayID = runningDisplayID else {

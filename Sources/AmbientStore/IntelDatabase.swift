@@ -127,6 +127,22 @@ struct IntelDatabase: Sendable {
                 );
                 """)
         }
+        migrator.registerMigration("v3-ai-log") { db in
+            // Answers of the on-device LLM, for review in the archive (SPEC AL-1).
+            try db.execute(sql: """
+                CREATE TABLE ai_answer (
+                  id TEXT PRIMARY KEY,
+                  timestamp REAL NOT NULL,
+                  feature TEXT NOT NULL,
+                  subject TEXT NOT NULL,
+                  answer TEXT NOT NULL,
+                  outcome TEXT NOT NULL,
+                  duration_ms INTEGER,
+                  application TEXT
+                );
+                CREATE INDEX ai_answer_time ON ai_answer(timestamp);
+                """)
+        }
         return migrator
     }
 }

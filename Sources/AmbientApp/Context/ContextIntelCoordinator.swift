@@ -12,6 +12,8 @@ actor ContextIntelCoordinator {
         var spoilerLevel: SpoilerLevel
         var targetLanguage: String
         var memoryEnabled: Bool
+        /// Record the on-device model's answers for the archive's AI LOG.
+        var aiLogEnabled: Bool = false
     }
 
     private let store: IntelStore
@@ -33,6 +35,12 @@ actor ContextIntelCoordinator {
 
     func update(_ configuration: Configuration) {
         self.configuration = configuration
+    }
+
+    private func logAI(_ feature: IntelFeature, subject: String, answer: String, outcome: AIAnswerOutcome, since start: Date) async {
+        guard configuration.aiLogEnabled else { return }
+        await store.recordAIAnswer(AIAnswerRecord(feature: feature, subject: subject, answer: answer, outcome: outcome,
+                                                  durationMilliseconds: Int(Date().timeIntervalSince(start) * 1000)))
     }
 
     func pageChanged(bundleIdentifier: String?, title: String?, url: URL?) async {
@@ -63,15 +71,23 @@ actor ContextIntelCoordinator {
             guard cached.summary != TermExplanationSanitizer.declinedMarker else { return }
             info = cached.detail.flatMap { try? JSONDecoder().decode(MediaInfoAnswer.self, from: Data($0.utf8)) }
         } else {
+            let start = Date()
             do {
                 let answer = try await research.mediaInfo(for: reference, spoiler: configuration.spoilerLevel, targetLanguage: configuration.targetLanguage)
                 let accepted = MediaPolicy.accept(answer)
+                let logged = answer.isKnownWork
+                    ? "\(answer.title) (\(answer.year)) — \(answer.cast.prefix(3).map { "\($0.character): \($0.performer)" }.joined(separator: ", "))"
+                      + String(format: " (%.2f)", answer.confidence)
+                    : "unknown work"
+                await logAI(.mediaCard, subject: reference.title, answer: logged,
+                            outcome: accepted ? .shown : (answer.isKnownWork ? .filtered : .declined), since: start)
                 let json = accepted ? (try? JSONEncoder().encode(answer)).map { String(decoding: $0, as: UTF8.self) } : nil
                 await store.saveKnowledge(entity: cacheEntity, summary: accepted ? answer.title : TermExplanationSanitizer.declinedMarker,
                                           detail: json, source: "on-device", ttl: 7 * 24 * 3600)
                 info = accepted ? answer : nil
             } catch {
                 Log.app.error("Work lookup failed: \(String(describing: error), privacy: .public)")
+                await logAI(.mediaCard, subject: reference.title, answer: AnalysisPipeline.describe(error), outcome: .failed, since: start)
                 return
             }
         }
@@ -111,8 +127,12 @@ actor ContextIntelCoordinator {
         // General background from the on-device model (it cannot know the event itself).
         var hasBackground = false
         if let research, research.isAvailable {
+            let start = Date()
             do {
                 let context = try await research.newsContext(headline: headline, targetLanguage: configuration.targetLanguage)
+                let usable = context.isNewsStory && !context.background.isEmpty
+                await logAI(.newsBackground, subject: headline, answer: usable ? context.background : "nothing established to say",
+                            outcome: usable ? .shown : .declined, since: start)
                 if context.isNewsStory, !context.background.isEmpty {
                     hasBackground = true
                     lines.append(context.background)
@@ -122,6 +142,7 @@ actor ContextIntelCoordinator {
                 }
             } catch {
                 Log.app.error("News background failed: \(String(describing: error), privacy: .public)")
+                await logAI(.newsBackground, subject: headline, answer: AnalysisPipeline.describe(error), outcome: .failed, since: start)
             }
         }
 

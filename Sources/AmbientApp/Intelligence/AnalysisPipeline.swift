@@ -9,20 +9,13 @@ struct PipelineConfiguration: Sendable, Equatable {
     var performanceMode: PerformanceMode
     var imageClassificationEnabled: Bool
     var privacyPolicy: PrivacyPolicy
-    var briefingEnabled: Bool
     var memoryEnabled: Bool
-    /// Technical-term explanations and LLM judgement of borderline candidates (Apple Intelligence).
-    var reasoningEnabled: Bool = true
-    /// Warn when secrets appear while the screen is shared.
-    var warnSensitiveWhileSharing: Bool = true
+    /// Which kinds of intel are on and which win when several qualify (SPEC ST-1/ST-2).
+    var features: FeatureSettings = .default
+    /// Record every on-device LLM answer for the archive's AI LOG (SPEC AL-1).
+    var aiLogEnabled: Bool = false
     /// Experimental: cover secrets with opaque boxes while the screen is shared.
     var redactWhileSharing: Bool = false
-    /// On-device identification and knowledge (estimates, LOCAL_AI.md LA-1/LA-2).
-    var localKnowledgeEnabled: Bool = true
-    /// Convert imperial quantities under a resting pointer (LOCAL_AI.md LA-15).
-    var unitConversionEnabled: Bool = true
-    /// Look up public figures whose names appear on screen next to a face.
-    var publicFigureEnabled: Bool = true
     /// Draw changed regions, OCR areas, router scores and timings on screen.
     var debugOverlay: Bool = false
 }
@@ -136,13 +129,14 @@ actor AnalysisPipeline {
         self.privacy = PrivacyManager(policy: configuration.privacyPolicy)
         self.foreground = foreground
         self.present = present
-        self.briefingProvider = configuration.briefingEnabled ? briefingProvider : nil
+        self.briefingProvider = configuration.features.isEnabled(.briefing) ? briefingProvider : nil
         self.store = store
-        self.reasoner = configuration.reasoningEnabled ? reasoner : nil
+        self.reasoner = reasoner
         self.screenShare = screenShare
         self.page = page
         self.media = media
-        self.identifier = configuration.localKnowledgeEnabled ? identifier : nil
+        let features = configuration.features
+        self.identifier = features.isEnabled(.identification) || features.isEnabled(.publicFigure) ? identifier : nil
         self.displayID = displayID
     }
 
@@ -237,6 +231,7 @@ actor AnalysisPipeline {
         }
 
         counters.analyses += 1
+        let features = configuration.features
         let padded = regions.map { $0.expanded(dx: regionPadding.dx, dy: regionPadding.dy) }
         Log.vision.debug("OCR started: \(padded.count) region(s)")
         let ocrStart = clock.now
@@ -259,8 +254,10 @@ actor AnalysisPipeline {
         }
 
         // Learn abbreviations the screen defines, to expand them elsewhere later.
-        for block in safeBlocks {
-            glossary.learn(from: block.text)
+        if features.isEnabled(.glossary) {
+            for block in safeBlocks {
+                glossary.learn(from: block.text)
+            }
         }
 
         let classifyStart = clock.now
@@ -278,7 +275,8 @@ actor AnalysisPipeline {
             visualCategories: categories
         )
         let routeStart = clock.now
-        let decision = router.decide(context)
+        // Disabled features are dropped; among the rest the user's priority decides.
+        let decision = features.select(from: router.candidates(for: context))
         diagnostics.timings["route"] = Self.milliseconds(clock.now - routeStart)
         var action = decision.selected
 
@@ -289,9 +287,17 @@ actor AnalysisPipeline {
             case .explainTerm:
                 action = candidate   // the explainer decides whether it is worth it
             case .translate:
-                if llmLimiter.allow(now: frame.timestamp) {
+                if features.isEnabled(.llmRouter), llmLimiter.allow(now: frame.timestamp) {
                     let llmStart = clock.now
-                    let show = (try? await reasoner.shouldShow(candidate, appName: app.appName, targetLanguage: configuration.targetLanguage)) ?? false
+                    let subject = candidate.payload ?? ""
+                    var show = false
+                    do {
+                        show = try await reasoner.shouldShow(candidate, appName: app.appName, targetLanguage: configuration.targetLanguage)
+                        await logAI(.llmRouter, subject: subject, answer: show ? "show" : "ignore",
+                                    outcome: show ? .shown : .declined, since: llmStart, app: app)
+                    } catch {
+                        await logAI(.llmRouter, subject: subject, answer: Self.describe(error), outcome: .failed, since: llmStart, app: app)
+                    }
                     diagnostics.timings["llm"] = Self.milliseconds(clock.now - llmStart)
                     if show { action = RouterEscalation.apply(show: true, to: candidate) }
                 }
@@ -300,7 +306,7 @@ actor AnalysisPipeline {
             }
         }
         // Without the LLM, an abbreviation defined earlier on screen can still be expanded.
-        if action.action == .ignore, activeReasoner == nil,
+        if action.action == .ignore, activeReasoner == nil, features.isEnabled(.glossary),
            let candidate = decision.candidates.first(where: { candidate in
                candidate.action == .explainTerm && candidate.interestScore.level != .ignore
                    && candidate.payload.flatMap { glossaryDefinition(for: $0, context: candidate.context) } != nil
@@ -308,22 +314,36 @@ actor AnalysisPipeline {
             action = candidate
         }
 
+        // Nothing from the router: the other kinds, in the user's priority order.
         var outcome: IntelOutcome?
-        if action.action == .ignore, let dwell = lastDwell, frame.timestamp - dwell.timestamp <= 4 {
-            outcome = await showConversions(in: safeBlocks, dwellRegion: dwell.region, timestamp: frame.timestamp)
-            if outcome != nil { lastDwell = nil }
-        }
-        if action.action == .ignore, outcome == nil, let code = codes.first {
-            outcome = await showQRCode(code.payload, rect: code.rect, app: app, timestamp: frame.timestamp)
-        }
-        if action.action == .ignore, outcome == nil {
-            outcome = await showCastIfNamed(safeBlocks, app: app, windowTitle: windowTitle, timestamp: frame.timestamp)
-        }
-        if action.action == .ignore, outcome == nil, let identifier, identifier.isAvailable {
-            let identifyStart = clock.now
-            outcome = await identifyLocally(identifier, classification: classification, regions: padded, blocks: safeBlocks,
-                                            frame: frame, app: app, windowTitle: windowTitle)
-            if outcome != nil { diagnostics.timings["identify"] = Self.milliseconds(clock.now - identifyStart) }
+        if action.action == .ignore {
+            var triedIdentification = false
+            for feature in features.ordered([.unitConversion, .qrCode, .castOnScreen, .identification, .publicFigure]) {
+                guard outcome == nil else { break }
+                switch feature {
+                case .unitConversion:
+                    if let dwell = lastDwell, frame.timestamp - dwell.timestamp <= 4 {
+                        outcome = await showConversions(in: safeBlocks, dwellRegion: dwell.region, timestamp: frame.timestamp)
+                        if outcome != nil { lastDwell = nil }
+                    }
+                case .qrCode:
+                    if let code = codes.first {
+                        outcome = await showQRCode(code.payload, rect: code.rect, app: app, timestamp: frame.timestamp)
+                    }
+                case .castOnScreen:
+                    outcome = await showCastIfNamed(safeBlocks, app: app, windowTitle: windowTitle, timestamp: frame.timestamp)
+                case .identification, .publicFigure:
+                    // One pass covers both (pictures first, then a name next to a face).
+                    guard !triedIdentification, let identifier, identifier.isAvailable else { continue }
+                    triedIdentification = true
+                    let identifyStart = clock.now
+                    outcome = await identifyLocally(identifier, classification: classification, regions: padded, blocks: safeBlocks,
+                                                    frame: frame, app: app, windowTitle: windowTitle)
+                    if outcome != nil { diagnostics.timings["identify"] = Self.milliseconds(clock.now - identifyStart) }
+                default:
+                    break
+                }
+            }
         }
         switch action.action {
         case .ignore:
@@ -461,14 +481,19 @@ actor AnalysisPipeline {
         guard explicit || !cooldown.isCoolingDown(key, now: timestamp) else { return .cooldown }
         var explanation: ErrorExplanation?
         if let reasoner = activeReasoner, explicit || llmLimiter.allow(now: timestamp) {
+            let start = clock.now
             do {
                 let raw = try await reasoner.explainError(line, context: candidate.context ?? line, targetLanguage: configuration.targetLanguage)
                 explanation = DeveloperOutputSanitizer.sanitize(raw, errorLine: line)
+                let answer = raw.fix.map { "\(raw.cause) ▸ \($0)" } ?? raw.cause
+                await logAI(.errorExplanation, subject: line, answer: answer, outcome: explanation == nil ? .filtered : .shown,
+                            since: start, app: app)
             } catch {
                 Log.pipeline.error("Error explanation failed: \(String(describing: error), privacy: .public)")
+                await logAI(.errorExplanation, subject: line, answer: Self.describe(error), outcome: .failed, since: start, app: app)
             }
         }
-        if explanation == nil {
+        if explanation == nil, configuration.features.isEnabled(.errorHints) {
             explanation = ErrorHints.hint(for: line, targetLanguage: configuration.targetLanguage)
         }
         guard let explanation else { return .discarded }
@@ -492,7 +517,7 @@ actor AnalysisPipeline {
 
     /// Summarizes the code around a pointer dwell.
     private func explainCode(in region: CGRect, frame: AnalyzableFrame, app: ForegroundContextProvider.Snapshot) async -> IntelOutcome {
-        guard activeReasoner != nil else { return .discarded }
+        guard activeReasoner != nil, configuration.features.isEnabled(.codeSummary) else { return .discarded }
         let lines = await ocr.recognizeText(in: frame.pixelBuffer, regions: [ChangedRegion(rect: region, confidence: 1)])
         let code = lines
             .sorted { $0.boundingBox.minY < $1.boundingBox.minY }
@@ -508,9 +533,15 @@ actor AnalysisPipeline {
               sensitiveDetector.kinds(in: code).isEmpty else { return .discarded }
         let key = CooldownCache.key(action: .explainCode, payload: String(code.prefix(200)))
         guard explicit || (!cooldown.isCoolingDown(key, now: timestamp) && llmLimiter.allow(now: timestamp)) else { return .cooldown }
+        let start = clock.now
+        let subject = code.split(separator: "\n").first.map(String.init) ?? code
         do {
             let raw = try await reasoner.summarizeCode(code, targetLanguage: configuration.targetLanguage)
-            guard let summary = DeveloperOutputSanitizer.sanitize(raw) else { return .discarded }
+            guard let summary = DeveloperOutputSanitizer.sanitize(raw) else {
+                await logAI(.codeSummary, subject: subject, answer: raw.summary, outcome: raw.isCode ? .filtered : .declined, since: start, app: app)
+                return .discarded
+            }
+            await logAI(.codeSummary, subject: subject, answer: summary.summary, outcome: .shown, since: start, app: app)
             cooldown.record(key, now: timestamp)
             let firstLine = code.split(separator: "\n").first.map { String($0.prefix(80)) } ?? ""
             let message = HUDMessage(
@@ -527,6 +558,7 @@ actor AnalysisPipeline {
             return .shown
         } catch {
             Log.pipeline.error("Code summary failed: \(String(describing: error), privacy: .public)")
+            await logAI(.codeSummary, subject: subject, answer: Self.describe(error), outcome: .failed, since: start, app: app)
             return .failed
         }
     }
@@ -557,19 +589,30 @@ actor AnalysisPipeline {
     ) async -> IntelOutcome? {
         let context = blocks.map(\.text).joined(separator: " ")
 
-        if let hint = classification.categories.first(where: { [.animal, .plant, .landmark, .food, .product].contains($0) }),
+        if configuration.features.isEnabled(.identification),
+           let hint = classification.categories.first(where: { [.animal, .plant, .landmark, .food, .product].contains($0) }),
            let largest = regions.max(by: { $0.area < $1.area }),
            explicit || Double(largest.area) >= IdentificationPolicy.minimumRegionArea {
             let labels = VisualLabelSelector.select(classification.labels, for: hint)
             guard !labels.isEmpty else { return .discarded }
             guard explicit || identifyLimiter.allow(now: frame.timestamp) else { return .cooldown }
+            let start = clock.now
+            let subject = labels.map(\.readable).joined(separator: ", ")
             do {
                 var answer = try await identifier.identify(labels: labels, hint: hint, context: context, targetLanguage: configuration.targetLanguage)
                 answer.confidence = IdentificationPolicy.localConfidence(
                     answer, labelConfidence: VisualLabelSelector.topConfidence(labels), nearbyText: context)
-                guard IdentificationPolicy.accept(answer, hint: hint) else { return .discarded }
+                let logged = [answer.name, answer.scientificName].filter { !$0.isEmpty }.joined(separator: " / ")
+                    + (answer.facts.isEmpty ? "" : " — " + answer.facts.joined(separator: "; "))
+                    + String(format: " (%.2f)", answer.confidence)
+                guard IdentificationPolicy.accept(answer, hint: hint) else {
+                    await logAI(.identification, subject: subject, answer: logged, outcome: answer.category == "none" ? .declined : .filtered,
+                                since: start, app: app)
+                    return .discarded
+                }
                 let key = CooldownCache.key(action: .ignore, payload: "id " + answer.name)
                 guard passesCooldown(key, now: frame.timestamp, explicit: explicit) else { return .cooldown }
+                await logAI(.identification, subject: subject, answer: logged, outcome: .shown, since: start, app: app)
                 let entityType: EntityType
                 let action: SuggestedAction
                 switch answer.category {
@@ -596,11 +639,12 @@ actor AnalysisPipeline {
                 return .shown
             } catch {
                 Log.pipeline.error("On-device identification failed: \(String(describing: error), privacy: .public)")
+                await logAI(.identification, subject: subject, answer: Self.describe(error), outcome: .failed, since: start, app: app)
                 return .failed
             }
         }
 
-        guard configuration.publicFigureEnabled, !explicit else { return nil }
+        guard configuration.features.isEnabled(.publicFigure), !explicit else { return nil }
         let text = ([windowTitle].compactMap { $0 } + blocks.map(\.text)).joined(separator: "\n")
         let people = NLEntityExtractor.entities(in: text).filter { $0.type == .person }
         guard let person = people.first(where: { !personCooldown.isCoolingDown($0.canonicalName, now: frame.timestamp) }) else { return nil }
@@ -618,9 +662,15 @@ actor AnalysisPipeline {
                                          knownFor: cached.detail?.components(separatedBy: "\n") ?? [], confidence: 1)
         } else {
             guard identifyLimiter.allow(now: frame.timestamp) else { return .cooldown }
+            let start = clock.now
             do {
                 let answer = try await identifier.publicFigure(named: person.name, context: String(text.prefix(300)), targetLanguage: configuration.targetLanguage)
                 let accepted = IdentificationPolicy.accept(answer, nameOnScreen: person.name)
+                let logged = answer.isPublicFigure
+                    ? "\(answer.name) — \(answer.role); \(answer.knownFor.joined(separator: ", "))" + String(format: " (%.2f)", answer.confidence)
+                    : "not a public figure"
+                await logAI(.publicFigure, subject: person.name, answer: logged,
+                            outcome: accepted ? .shown : (answer.isPublicFigure ? .filtered : .declined), since: start, app: app)
                 await store.saveKnowledge(
                     entity: person,
                     summary: accepted ? answer.role : TermExplanationSanitizer.declinedMarker,
@@ -630,6 +680,7 @@ actor AnalysisPipeline {
                 profile = accepted ? answer : nil
             } catch {
                 Log.pipeline.error("Public figure lookup failed: \(String(describing: error), privacy: .public)")
+                await logAI(.publicFigure, subject: person.name, answer: Self.describe(error), outcome: .failed, since: start, app: app)
                 return .failed
             }
         }
@@ -675,8 +726,10 @@ actor AnalysisPipeline {
             .sorted { $0.boundingBox.minY < $1.boundingBox.minY }
             .map(\.text)
             .joined(separator: "\n")
-        for block in safeBlocks {
-            glossary.learn(from: block.text)
+        if configuration.features.isEnabled(.glossary) {
+            for block in safeBlocks {
+                glossary.learn(from: block.text)
+            }
         }
         let classification = configuration.imageClassificationEnabled
             ? await classifier.classify(frame.pixelBuffer, region: region)
@@ -694,7 +747,8 @@ actor AnalysisPipeline {
             text: text,
             conversions: UnitConverter.conversions(in: text, targetLanguage: configuration.targetLanguage),
             categories: classification.categories,
-            canUseLanguageModel: activeReasoner != nil
+            canUseLanguageModel: activeReasoner != nil,
+            features: configuration.features
         )
         Log.pipeline.debug("Circle lookup: \(text.count) chars, \(classification.labels.count) label(s)")
 
@@ -750,11 +804,17 @@ actor AnalysisPipeline {
 
     /// "What is this?" for circled text, by the on-device model.
     private func describeRegion(_ text: String, region: CGRect, app: ForegroundContextProvider.Snapshot) async -> IntelOutcome {
-        guard let reasoner = activeReasoner else { return .discarded }
+        guard let reasoner = activeReasoner, configuration.features.isEnabled(.regionSummary) else { return .discarded }
         let input = String(text.prefix(RegionDescription.maximumInputLength))
+        let subject = input.split(separator: "\n").first.map(String.init) ?? input
+        let start = clock.now
         do {
             let raw = try await reasoner.describe(text: input, appName: app.appName, targetLanguage: configuration.targetLanguage)
-            guard let summary = RegionDescription.sanitize(raw, input: input) else { return .discarded }
+            guard let summary = RegionDescription.sanitize(raw, input: input) else {
+                await logAI(.regionSummary, subject: subject, answer: raw, outcome: .filtered, since: start, app: app)
+                return .discarded
+            }
+            await logAI(.regionSummary, subject: subject, answer: summary, outcome: .shown, since: start, app: app)
             let firstLine = input.split(separator: "\n").first.map { String($0.prefix(80)) } ?? ""
             let message = HUDMessage(
                 kind: .regionSummary,
@@ -770,6 +830,7 @@ actor AnalysisPipeline {
             return .shown
         } catch {
             Log.pipeline.error("Region description failed: \(String(describing: error), privacy: .public)")
+            await logAI(.regionSummary, subject: subject, answer: Self.describe(error), outcome: .failed, since: start, app: app)
             return .failed
         }
     }
@@ -778,7 +839,7 @@ actor AnalysisPipeline {
 
     /// Imperial quantities in the text under a resting pointer, converted to metric.
     private func showConversions(in blocks: [RecognizedTextRegion], dwellRegion: CGRect, timestamp: TimeInterval) async -> IntelOutcome? {
-        guard configuration.unitConversionEnabled else { return nil }
+        guard configuration.features.isEnabled(.unitConversion) else { return nil }
         for block in blocks where block.boundingBox.intersects(dwellRegion) {
             let conversions = UnitConverter.conversions(in: block.text, targetLanguage: configuration.targetLanguage)
             guard let first = conversions.first else { continue }
@@ -862,7 +923,7 @@ actor AnalysisPipeline {
         if configuration.redactWhileSharing {
             await present(.redact(high.compactMap(\.region)))
         }
-        guard configuration.warnSensitiveWhileSharing,
+        guard configuration.features.isEnabled(.sensitiveWarning),
               let first = high.first,
               warningCooldown.checkAndRecord("warn:\(first.kind.rawValue)", now: timestamp) else { return }
         let japanese = LanguageCode.base(configuration.targetLanguage) == "ja"
@@ -886,6 +947,25 @@ actor AnalysisPipeline {
         return reasoner
     }
 
+    /// Keeps an on-device LLM answer for the archive's AI LOG (SPEC AL-1), when enabled.
+    private func logAI(_ feature: IntelFeature, subject: String, answer: String, outcome: AIAnswerOutcome,
+                       since start: ContinuousClock.Instant, app: ForegroundContextProvider.Snapshot?) async {
+        guard configuration.aiLogEnabled else { return }
+        await store.recordAIAnswer(AIAnswerRecord(
+            feature: feature,
+            subject: subject,
+            answer: answer,
+            outcome: outcome,
+            durationMilliseconds: Int(Self.milliseconds(clock.now - start)),
+            application: app?.appName
+        ))
+    }
+
+    /// The error's type only (no screen text), for the AI LOG.
+    static func describe(_ error: Error) -> String {
+        "error: " + String(describing: type(of: error))
+    }
+
     /// Automatic intel respects the cooldown; an explicit request (circle) always passes but is still recorded.
     private func passesCooldown(_ key: String, now: TimeInterval, explicit: Bool) -> Bool {
         guard explicit else { return cooldown.checkAndRecord(key, now: now) }
@@ -896,7 +976,7 @@ actor AnalysisPipeline {
     /// A definition of the abbreviation seen earlier on screen, unless the
     /// text around it already defines it (the page explains itself).
     private func glossaryDefinition(for term: String, context: String?) -> AcronymDefinition? {
-        guard let definition = glossary.lookup(term) else { return nil }
+        guard configuration.features.isEnabled(.glossary), let definition = glossary.lookup(term) else { return nil }
         if let context, context.localizedCaseInsensitiveContains(definition.expansion) { return nil }
         return definition
     }
@@ -929,11 +1009,15 @@ actor AnalysisPipeline {
             explanation = TermExplanation(shouldExplain: true, expansion: cached.detail, summary: cached.summary)
         } else {
             guard let reasoner, explicit || llmLimiter.allow(now: timestamp) else { return .discarded }
+            let start = clock.now
             do {
                 var context = candidate.context ?? term
                 if let definition { context = "\(definition.acronym) = \(definition.expansion). " + context }
                 let raw = try await reasoner.explain(term: term, context: context, targetLanguage: configuration.targetLanguage)
                 let cleaned = TermExplanationSanitizer.sanitize(raw, term: term)
+                let logged = [raw.expansion, raw.summary].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " — ")
+                await logAI(.termExplanation, subject: term, answer: raw.shouldExplain ? logged : "not worth explaining",
+                            outcome: !raw.shouldExplain ? .declined : (cleaned == nil ? .filtered : .shown), since: start, app: app)
                 await store.saveKnowledge(
                     term: term,
                     summary: cleaned?.summary ?? TermExplanationSanitizer.declinedMarker,
@@ -944,6 +1028,7 @@ actor AnalysisPipeline {
                 explanation = cleaned
             } catch {
                 Log.pipeline.error("Term explanation failed: \(String(describing: error), privacy: .public)")
+                await logAI(.termExplanation, subject: term, answer: Self.describe(error), outcome: .failed, since: start, app: app)
                 return .failed
             }
         }
@@ -1021,29 +1106,55 @@ actor AnalysisPipeline {
         )
         let present = self.present
         let memory: IntelStore? = configuration.memoryEnabled ? store : nil
+        let log: IntelStore? = configuration.aiLogEnabled ? store : nil
         let timeout = briefingTimeout
         Task.detached(priority: .utility) {
-            let text: String? = await withTaskGroup(of: String?.self) { group in
+            /// What happened, for the AI LOG: the raw answer, an error, or a timeout.
+            enum BriefingResult: Sendable {
+                case answer(raw: String, cleaned: String?)
+                case failed(String)
+                case timedOut
+            }
+            let started = Date()
+            let result: BriefingResult = await withTaskGroup(of: BriefingResult.self) { group in
                 group.addTask {
                     do {
                         let raw = try await provider.briefing(for: request)
-                        return BriefingSanitizer.sanitize(raw, translation: request.translation)
+                        return .answer(raw: raw, cleaned: BriefingSanitizer.sanitize(raw, translation: request.translation))
                     } catch {
                         Log.translation.debug("Briefing failed: \(String(describing: error), privacy: .public)")
-                        return nil
+                        return .failed(AnalysisPipeline.describe(error))
                     }
                 }
                 group.addTask {
                     try? await Task.sleep(for: timeout)
-                    return nil
+                    return .timedOut
                 }
-                let first = await group.next() ?? nil
+                let first = await group.next() ?? .timedOut
                 group.cancelAll()
                 return first
             }
+            var text: String?
+            if case .answer(_, let cleaned) = result { text = cleaned }
             await present(.briefing(messageID: message.id, text: text))
             if let text {
                 await memory?.updateBriefing(text, for: message.id)
+            }
+            if let log {
+                let (answer, outcome): (String, AIAnswerOutcome)
+                switch result {
+                case .answer(let raw, let cleaned): (answer, outcome) = (cleaned ?? raw, cleaned == nil ? .filtered : .shown)
+                case .failed(let reason): (answer, outcome) = (reason, .failed)
+                case .timedOut: (answer, outcome) = ("timed out", .failed)
+                }
+                await log.recordAIAnswer(AIAnswerRecord(
+                    feature: .briefing,
+                    subject: message.detail,
+                    answer: answer,
+                    outcome: outcome,
+                    durationMilliseconds: Int(Date().timeIntervalSince(started) * 1000),
+                    application: appName
+                ))
             }
         }
     }

@@ -17,7 +17,7 @@ struct ArchiveView: View {
         VStack(spacing: 0) {
             header
             tabBar
-            if model.tab == .records {
+            if model.tab == .records || model.tab == .aiLog {
                 queryField
             }
             Rectangle().fill(SpyTheme.accentDim).frame(height: 0.75)
@@ -25,6 +25,7 @@ struct ArchiveView: View {
             case .records: results
             case .sessions: sessionsList
             case .today: todayView
+            case .aiLog: aiLogList
             }
             footer
         }
@@ -185,6 +186,97 @@ struct ArchiveView: View {
         }
     }
 
+    // MARK: AI LOG
+
+    @ViewBuilder
+    private var aiLogList: some View {
+        if model.aiAnswers.isEmpty {
+            emptyState(title: "NO AI ANSWERS", detail: "Answers of the on-device model appear here when “Keep AI answers” is on in Settings.")
+        } else {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(model.aiAnswers) { answer in
+                        aiAnswerRow(answer)
+                    }
+                }
+            }
+        }
+    }
+
+    private func aiAnswerRow(_ answer: AIAnswerRecord) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                Text(Self.timeFormatter.string(from: answer.date))
+                    .foregroundStyle(SpyTheme.textSecondary)
+                Text(Self.featureCode(answer.feature))
+                    .foregroundStyle(SpyTheme.accent)
+                Text(Self.outcomeLabel(answer.outcome))
+                    .foregroundStyle(answer.outcome == .shown ? SpyTheme.accent : (answer.outcome == .failed ? SpyTheme.alert : SpyTheme.intel))
+                    .padding(.horizontal, 4)
+                    .overlay(Rectangle().strokeBorder(SpyTheme.accentDim, lineWidth: 0.75))
+                Spacer()
+                if let milliseconds = answer.durationMilliseconds {
+                    Text(verbatim: "\(milliseconds) MS")
+                        .foregroundStyle(SpyTheme.textSecondary)
+                }
+                if model.copiedID == answer.id {
+                    Text("COPIED").foregroundStyle(SpyTheme.accent)
+                }
+            }
+            .font(SpyTheme.mono(9.5, weight: .bold))
+            .tracking(1)
+            Text(answer.subject)
+                .font(.system(size: 11.5))
+                .foregroundStyle(SpyTheme.textSecondary)
+                .lineLimit(1)
+            Text(answer.answer)
+                .font(.system(size: 13))
+                .foregroundStyle(SpyTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(SpyTheme.accent.opacity(0.08)).frame(height: 0.5)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { model.copy(answer) }
+        .help("Click to copy the answer")
+    }
+
+    private static func featureCode(_ feature: IntelFeature) -> String {
+        switch feature {
+        case .qrCode: return "QR"
+        case .errorExplanation: return "FAULT"
+        case .translation: return "TRANSLATE"
+        case .unitConversion: return "UNITS"
+        case .termExplanation: return "TERM"
+        case .codeSummary: return "CODE"
+        case .identification: return "ID"
+        case .publicFigure: return "DOSSIER"
+        case .castOnScreen: return "CAST"
+        case .regionSummary: return "TARGET"
+        case .briefing: return "BRIEF"
+        case .llmRouter: return "ROUTER"
+        case .glossary: return "GLOSSARY"
+        case .errorHints: return "HINT"
+        case .mediaCard: return "FEATURE"
+        case .newsBackground: return "NEWS"
+        case .sensitiveWarning: return "SHARING"
+        case .circleLookup: return "CIRCLE"
+        }
+    }
+
+    private static func outcomeLabel(_ outcome: AIAnswerOutcome) -> String {
+        switch outcome {
+        case .shown: return "SHOWN"
+        case .declined: return "DECLINED"
+        case .filtered: return "FILTERED"
+        case .failed: return "FAILED"
+        }
+    }
+
     private func emptyState(title: String, detail: String) -> some View {
         VStack(spacing: 8) {
             Spacer()
@@ -326,6 +418,19 @@ struct ArchiveView: View {
             Spacer()
             Text("⌥⌘K")
                 .foregroundStyle(SpyTheme.accent.opacity(0.7))
+            if model.tab == .aiLog {
+                Button {
+                    model.clearAILog()
+                } label: {
+                    Text("CLEAR AI LOG")
+                        .foregroundStyle(SpyTheme.alert)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .overlay(Rectangle().strokeBorder(SpyTheme.alert.opacity(0.6), lineWidth: 0.75))
+                }
+                .buttonStyle(.plain)
+                .disabled(model.aiAnswers.isEmpty)
+            }
             Button {
                 confirmPurge = true
             } label: {

@@ -20,7 +20,9 @@ public enum ActiveLookupPlanner {
     /// Text shorter than this is not worth describing.
     public static let minimumDescribeLength = 12
 
-    /// Order: QR → error → (short quantity) → foreign text → units → term → code → picture → description.
+    /// Collects what the circled area could be answered with, then picks the
+    /// user's highest-priority enabled feature (default order: QR → error →
+    /// foreign text → units → term → code → picture → description).
     /// `candidates` are the router's candidates for the circled area (any score).
     public static func plan(
         qrPayloads: [String],
@@ -28,34 +30,53 @@ public enum ActiveLookupPlanner {
         text: String,
         conversions: [UnitConversion],
         categories: [VisualCategory],
-        canUseLanguageModel: Bool
+        canUseLanguageModel: Bool,
+        features: FeatureSettings = .default
     ) -> ActiveLookupPlan {
-        if let code = qrPayloads.first { return .qrCode(code) }
-        if let error = candidates.first(where: { $0.action == .explainError }) { return .explainError(error) }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        // A short quantity ("72°F", "5 miles away") is about the unit, not the language.
-        if !conversions.isEmpty, trimmed.count < 40 { return .convertUnits(conversions) }
-        if let foreign = candidates.first(where: { $0.action == .translate }) { return .translate(foreign) }
-        if !conversions.isEmpty { return .convertUnits(conversions) }
+        let options = eligible(qrPayloads: qrPayloads, candidates: candidates, text: text, conversions: conversions,
+                               categories: categories, canUseLanguageModel: canUseLanguageModel)
+        let order = features.ordered(options.map { $0.feature })
+        guard let best = order.first, let option = options.first(where: { $0.feature == best }) else { return .nothing }
+        return option.plan
+    }
 
-        let term = candidates.first(where: { $0.action == .explainTerm })
-        // A term circled on its own; inside a longer text the user more likely wants the gist.
-        if let term, let payload = term.payload, trimmed.count <= payload.count + 40 {
-            return .explainTerm(term)
+    /// Every answer that fits the circled area, in the default order.
+    static func eligible(
+        qrPayloads: [String],
+        candidates: [RoutedAction],
+        text: String,
+        conversions: [UnitConversion],
+        categories: [VisualCategory],
+        canUseLanguageModel: Bool
+    ) -> [(feature: IntelFeature, plan: ActiveLookupPlan)] {
+        var options: [(feature: IntelFeature, plan: ActiveLookupPlan)] = []
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let code = qrPayloads.first { options.append((.qrCode, .qrCode(code))) }
+        if let error = candidates.first(where: { $0.action == .explainError }) { options.append((.errorExplanation, .explainError(error))) }
+        // A short quantity ("72°F", "5 miles away") is about the unit, not the language.
+        let isShortQuantity = !conversions.isEmpty && trimmed.count < 40
+        if !isShortQuantity, let foreign = candidates.first(where: { $0.action == .translate }) {
+            options.append((.translation, .translate(foreign)))
+        }
+        if !conversions.isEmpty { options.append((.unitConversion, .convertUnits(conversions))) }
+        // A term circled on its own; inside a longer text the user more likely wants the gist
+        // (without the model, the glossary may still know the term).
+        if let term = candidates.first(where: { $0.action == .explainTerm }), let payload = term.payload,
+           trimmed.count <= payload.count + 40 || !canUseLanguageModel {
+            options.append((.termExplanation, .explainTerm(term)))
         }
         if canUseLanguageModel, trimmed.count >= 40, DeveloperOutputSanitizer.looksLikeCode(trimmed) {
-            return .explainCode(trimmed)
+            options.append((.codeSummary, .explainCode(trimmed)))
         }
         // Mostly picture: little text, and the classifier saw something nameable.
         if let category = categories.first(where: { [.animal, .plant, .landmark, .food, .product].contains($0) }),
            trimmed.count < 80 {
-            return .identify(category)
+            options.append((.identification, .identify(category)))
         }
         if canUseLanguageModel, trimmed.count >= minimumDescribeLength {
-            return .describe(trimmed)
+            options.append((.regionSummary, .describe(trimmed)))
         }
-        if let term { return .explainTerm(term) }   // the glossary may still know it
-        return .nothing
+        return options
     }
 }
 

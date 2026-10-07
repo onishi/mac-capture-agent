@@ -67,6 +67,17 @@
         }
       }
     },
+    "AI judgment of borderline cards": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "迷うカードの AI 判定"
+          }
+        }
+      }
+    },
     "API keys, private keys, tokens, card numbers and passwords are detected on-device. Their values are never stored or shown. Text containing them is never translated or archived.": {
       "extractionState": "manual",
       "localizations": {
@@ -89,6 +100,17 @@
         }
       }
     },
+    "Abbreviations defined on screen": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面で定義された略語"
+          }
+        }
+      }
+    },
     "Add": {
       "extractionState": "manual",
       "localizations": {
@@ -96,17 +118,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "追加"
-          }
-        }
-      }
-    },
-    "Adds a one-line note about what the text means for you. Runs entirely on this Mac.": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "その内容があなたにとって何を意味するかを 1 行で添えます。すべてこの Mac 上で動きます。"
           }
         }
       }
@@ -151,6 +162,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "解析"
+          }
+        }
+      }
+    },
+    "Animals, plants, landmarks, dishes, products (estimate)": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "動植物・ランドマーク・料理・製品（推定）"
+          }
+        }
+      }
+    },
+    "Answers of the on-device model appear here when “Keep AI answers” is on in Settings.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定で「AI の回答を記録」をオンにすると、端末内のモデルの回答がここに表示されます。"
           }
         }
       }
@@ -232,17 +265,6 @@
         }
       }
     },
-    "Briefing notes (Apple Intelligence, on-device)": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ひとことメモ（Apple Intelligence・端末内）"
-          }
-        }
-      }
-    },
     "Bundle identifier (e.g. com.example.app)": {
       "extractionState": "manual",
       "localizations": {
@@ -250,6 +272,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "バンドル ID（例: com.example.app）"
+          }
+        }
+      }
+    },
+    "Cast named in subtitles": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字幕に出たキャスト"
+          }
+        }
+      }
+    },
+    "Circle with ⌥ to look up": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌥ を押しながら丸で囲んで調べる"
           }
         }
       }
@@ -265,13 +309,13 @@
         }
       }
     },
-    "Convert miles, °F, pounds… where the pointer rests": {
+    "Click to copy the answer": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ポインタを置いたところのマイル・°F・ポンドなどを換算する"
+            "value": "クリックで回答をコピー"
           }
         }
       }
@@ -316,6 +360,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "変化領域・OCR 範囲・ルーターのスコア・件数・処理時間を画面に描きます。認識したテキストは表示しません。"
+          }
+        }
+      }
+    },
+    "Error causes (terminal, editor)": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エラーの原因（ターミナル・エディタ）"
           }
         }
       }
@@ -386,13 +441,13 @@
         }
       }
     },
-    "Explain technical terms and judge borderline text": {
+    "Features & priority": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "専門用語の解説と、迷う候補の判定"
+            "value": "機能と優先順位"
           }
         }
       }
@@ -430,17 +485,6 @@
         }
       }
     },
-    "Hold ⌥ and circle something to look it up": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "⌥ を押しながら丸で囲んだものを調べる"
-          }
-        }
-      }
-    },
     "Hover a card to keep it and to open its actions. ⌥⌘K opens the archive of everything it has shown you.": {
       "extractionState": "manual",
       "localizations": {
@@ -474,28 +518,6 @@
         }
       }
     },
-    "Identify animals, plants, landmarks, dishes and products (estimate)": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "動植物・ランドマーク・料理・製品を推定する"
-          }
-        }
-      }
-    },
-    "Identify public figures named on screen": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "画面に名前が出ている著名人を推定する"
-          }
-        }
-      }
-    },
     "Intelligence": {
       "extractionState": "manual",
       "localizations": {
@@ -514,6 +536,39 @@
           "stringUnit": {
             "state": "translated",
             "value": "基本は何も表示しません。ほとんどの時間は存在に気づかないはずです。役に立ちそうなときだけカードが現れ、数秒で消えます。"
+          }
+        }
+      }
+    },
+    "Items marked “AI” need macOS 26 with Apple Intelligence turned on; without it they do nothing.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「AI」の付いた項目には macOS 26 と Apple Intelligence が必要です。ない場合は何もしません。"
+          }
+        }
+      }
+    },
+    "Items marked “AI” use Apple Intelligence on this Mac.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「AI」の付いた項目は、この Mac の Apple Intelligence を使います。"
+          }
+        }
+      }
+    },
+    "Keep AI answers to review in the archive (AI LOG)": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI の回答を記録してアーカイブで見返す（AI LOG）"
           }
         }
       }
@@ -551,13 +606,24 @@
         }
       }
     },
-    "Movie / Anime mode (work card, cast on screen)": {
+    "Move Down": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "映画・アニメモード（作品カード、画面上のキャスト）"
+            "value": "下へ"
+          }
+        }
+      }
+    },
+    "Move Up": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上へ"
           }
         }
       }
@@ -569,6 +635,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "映画・アニメ・ニュース"
+          }
+        }
+      }
+    },
+    "NO AI ANSWERS": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI の回答はまだありません"
           }
         }
       }
@@ -595,13 +672,13 @@
         }
       }
     },
-    "News mode (background of the story)": {
+    "News background": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ニュースモード（ニュースの背景）"
+            "value": "ニュースの背景"
           }
         }
       }
@@ -672,6 +749,17 @@
         }
       }
     },
+    "One-line briefing notes": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ひとことメモ"
+          }
+        }
+      }
+    },
     "Open Apple Intelligence settings": {
       "extractionState": "manual",
       "localizations": {
@@ -712,6 +800,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "翻訳言語を開く"
+          }
+        }
+      }
+    },
+    "Other features": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "その他の機能"
           }
         }
       }
@@ -870,6 +969,17 @@
         }
       }
     },
+    "Public figures named on screen (estimate)": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面に名前が出ている著名人（推定）"
+          }
+        }
+      }
+    },
     "Purge Archive": {
       "extractionState": "manual",
       "localizations": {
@@ -877,6 +987,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "アーカイブを消去"
+          }
+        }
+      }
+    },
+    "QR codes": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR コード"
           }
         }
       }
@@ -925,17 +1046,6 @@
         }
       }
     },
-    "Requires macOS 26 with Apple Intelligence turned on.": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "macOS 26 で Apple Intelligence をオンにする必要があります。"
-          }
-        }
-      }
-    },
     "Reset Learned Preferences": {
       "extractionState": "manual",
       "localizations": {
@@ -943,6 +1053,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "学習した好みをリセット"
+          }
+        }
+      }
+    },
+    "Reset Order": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "順番を元に戻す"
           }
         }
       }
@@ -965,6 +1086,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "再試行"
+          }
+        }
+      }
+    },
+    "Rule-based error hints": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ルールによるエラーのヒント"
           }
         }
       }
@@ -1101,6 +1233,17 @@
         }
       }
     },
+    "Technical terms": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "専門用語"
+          }
+        }
+      }
+    },
     "To see what you see, the app needs Screen Recording permission. Frames stay in memory and are never saved or uploaded.": {
       "extractionState": "manual",
       "localizations": {
@@ -1178,6 +1321,28 @@
         }
       }
     },
+    "Turn each kind of intel on or off. When several could be shown at the same moment, the one higher in this list wins (also when you circle something).": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "機能ごとにオン・オフを切り替えられます。同時に複数の候補があるときは、このリストで上にあるものが優先されます（丸で囲んだときも同じです）。"
+          }
+        }
+      }
+    },
+    "Unit conversion (pointer rest)": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "単位換算（ポインタを止めたとき）"
+          }
+        }
+      }
+    },
     "Visual memory": {
       "extractionState": "manual",
       "localizations": {
@@ -1200,13 +1365,13 @@
         }
       }
     },
-    "Warn about secrets while sharing the screen": {
+    "Warn about secrets while sharing": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "画面共有中に秘密情報を警告する"
+            "value": "画面共有中の秘密情報の警告"
           }
         }
       }
@@ -1218,6 +1383,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "ようこそガイド…"
+          }
+        }
+      }
+    },
+    "What code does (pointer rest)": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コードの説明（ポインタを止めたとき）"
           }
         }
       }
@@ -1255,6 +1431,17 @@
         }
       }
     },
+    "Work card (movie, anime)": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作品カード（映画・アニメ）"
+          }
+        }
+      }
+    },
     "Work cards and news backgrounds come from the on-device model’s own knowledge (well-known works only; it does not know recent news). News mode also lists related pages you read earlier. Both need “Remember pages you read”. “Up to where I am” uses the episode number in the title; without one it behaves like “No spoilers”.": {
       "extractionState": "manual",
       "localizations": {
@@ -1262,6 +1449,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "作品カードとニュースの背景は、端末内のモデルが持つ知識から作ります（有名な作品のみ。最近のニュースは知りません）。ニュースモードでは以前に読んだ関連ページも表示します。どちらも「読んだページを記録する」が必要です。「見ているところまで」はタイトルの話数を使い、話数がなければ「ネタバレなし」と同じ動作になります。"
+          }
+        }
+      }
+    },
+    "“What is this?” for circled text": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "丸で囲んだ文章の「これは何？」"
           }
         }
       }

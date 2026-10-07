@@ -97,6 +97,7 @@ ScreenCaptureKit (5–30fps, 除外アプリと自分の HUD は画像から除�
 
 - 1 段目（常時）: ルールベース。各候補に `InterestScore`（0〜1）を付け、0.7 以上だけ表示。
 - 2 段目: 1 段目で「判断が割れる」候補（0.5〜0.7）だけを Foundation Models に渡して判定する。LLM が使えない環境では 1 段目のみ。
+- v0.11 から、1 段目の結果は `FeatureSettings.select` を通す: オフの機能の候補を除き、表示しきい値を超えた候補の中でユーザーの順位が最も高いものを選ぶ（同順位は重要度）。
 - 出力は `RoutedAction`（action / confidence / importance / region / payload）。
 
 #### 4.2.1 LLM ルーターのプロンプト（原文）
@@ -154,6 +155,7 @@ Foundation Models では `@Generable` の構造体で受け取り、JSON 文字�
 | データ | 保存先 | 内容 |
 | --- | --- | --- |
 | 設定 | `UserDefaults` | 翻訳先言語、モード、除外アプリ、表示位置など |
+| 機能の設定（ST-1 / ST-2） | `UserDefaults`（JSON、`featureSettings`） | オフにした機能と、HUD を取り合う機能の順位。`FeatureSettings` が正規化（未知の名前は無視、新しい機能は末尾に追加） |
 | Personalization | `UserDefaults`（JSON） | `action:…|lang:…|app:…` ごとの重み（−0.3〜+0.3） |
 | Visual Memory・閲覧記録・セッション・エンティティ・Knowledge Cache | `Application Support/AmbientScreenIntelligence/intel.sqlite`（GRDB） | HUD に表示した Intel と、設定で有効な場合のページのタイトル・URL・閲覧時間。保持 1/7/30 日（ブックマークを除く）、バックアップ除外。v0.4 の `visual-memory.json` は初回起動時に取り込んで削除 |
 | フレーム | メモリのみ | 保存しない |
@@ -172,6 +174,7 @@ Foundation Models では `@Generable` の構造体で受け取り、JSON 文字�
 | `embedding` | 検索用の文埋め込み |
 | `intel_fts` | 日本語の部分一致にも使う FTS5 trigram 索引 |
 | `work_session` / `bookmark` | v2 で追加した作業セッションと自動ブックマーク |
+| `ai_answer` | v3（v0.11）。端末内 LLM の回答の記録（機能・対象・回答・結果・所要時間・アプリ）。Archive の AI LOG |
 
 移行方針: 起動時に `visual-memory.json` があれば `observation` ＋ `intel` に取り込み、成功したら JSON を削除する。
 
@@ -201,6 +204,7 @@ Foundation Models では `@Generable` の構造体で受け取り、JSON 文字�
 | 画面フレーム | 出ない | しない | — |
 | OCR テキスト（解析中） | 出ない | HUD に表示したもの以外は保存しない（略語の組だけメモリ上に保持） | — |
 | HUD に表示した Intel | 出ない | SQLite | 1/7/30 日 |
+| 端末内 LLM の回答（AI LOG） | 出ない | SQLite（`ai_answer`、設定でオフ可） | 1/7/30 日。表示しなかった回答の対象（用語・名前・エラーの 1 行目など）も含む |
 | 閲覧したページのタイトル・サニタイズ済み URL・閲覧時間 | 出ない | SQLite（記録を有効にした場合） | 1/7/30 日。ブックマークは残す |
 | Personalization の重み | 出ない | UserDefaults | 無期限（リセット可） |
 | 作品・公人・識別の推定結果 | 出ない | `knowledge`（`source = "on-device"`） | 7〜30 日 |

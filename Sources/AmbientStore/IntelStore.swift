@@ -92,9 +92,55 @@ actor IntelStore: VisualMemoryStore {
 
     func removeAll() {
         perform("removeAll") { db in
-            try db.execute(sql: "DELETE FROM observation; DELETE FROM embedding; DELETE FROM intel_fts; DELETE FROM work_session;")
+            try db.execute(sql: "DELETE FROM observation; DELETE FROM embedding; DELETE FROM intel_fts; DELETE FROM work_session; DELETE FROM ai_answer;")
         }
         Self.logger.info("Visual memory purged")
+    }
+
+    // MARK: AI answer log (SPEC AL-1)
+
+    func recordAIAnswer(_ record: AIAnswerRecord) {
+        perform("recordAIAnswer") { db in
+            try db.execute(sql: """
+                INSERT OR REPLACE INTO ai_answer (id, timestamp, feature, subject, answer, outcome, duration_ms, application)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, arguments: [record.id.uuidString, record.date.timeIntervalSince1970, record.feature.rawValue, record.subject,
+                                 record.answer, record.outcome.rawValue, record.durationMilliseconds, record.application])
+        }
+    }
+
+    /// Newest first. `query` filters subject and answer (case-insensitive substring).
+    func aiAnswers(matching query: String = "", limit: Int = 200) -> [AIAnswerRecord] {
+        let needle = query.trimmingCharacters(in: .whitespaces)
+        let rows = read("aiAnswers") { db -> [Row] in
+            if needle.isEmpty {
+                return try Row.fetchAll(db, sql: "SELECT * FROM ai_answer ORDER BY timestamp DESC LIMIT ?", arguments: [limit])
+            }
+            let pattern = "%" + needle.replacingOccurrences(of: "%", with: "\\%").replacingOccurrences(of: "_", with: "\\_") + "%"
+            return try Row.fetchAll(db, sql: """
+                SELECT * FROM ai_answer
+                WHERE subject LIKE ? ESCAPE '\\' OR answer LIKE ? ESCAPE '\\' OR feature LIKE ? ESCAPE '\\'
+                ORDER BY timestamp DESC LIMIT ?
+                """, arguments: [pattern, pattern, pattern, limit])
+        } ?? []
+        return rows.compactMap { row in
+            let idString: String = row["id"]
+            let featureRaw: String = row["feature"]
+            let outcomeRaw: String = row["outcome"]
+            guard let id = UUID(uuidString: idString),
+                  let feature = IntelFeature(rawValue: featureRaw),
+                  let outcome = AIAnswerOutcome(rawValue: outcomeRaw) else { return nil }
+            let timestamp: Double = row["timestamp"]
+            return AIAnswerRecord(id: id, date: Date(timeIntervalSince1970: timestamp), feature: feature,
+                                  subject: row["subject"], answer: row["answer"], outcome: outcome,
+                                  durationMilliseconds: row["duration_ms"], application: row["application"])
+        }
+    }
+
+    func removeAIAnswers() {
+        perform("removeAIAnswers") { db in
+            try db.execute(sql: "DELETE FROM ai_answer")
+        }
     }
 
     // MARK: Entities & knowledge
@@ -232,6 +278,7 @@ actor IntelStore: VisualMemoryStore {
                 DELETE FROM observation WHERE timestamp < ? AND id NOT IN (SELECT observation_id FROM bookmark)
                 """, arguments: [cutoff])
             try db.execute(sql: "DELETE FROM work_session WHERE ended_at < ?", arguments: [cutoff])
+            try db.execute(sql: "DELETE FROM ai_answer WHERE timestamp < ?", arguments: [cutoff])
             try db.execute(sql: "DELETE FROM knowledge WHERE expires_at < ?", arguments: [now.timeIntervalSince1970])
         }
     }
