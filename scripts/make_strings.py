@@ -82,17 +82,12 @@ JA = {
     "Pretend the screen is being shared": "画面共有中として扱う",
     "Draws changed regions, OCR areas, router scores, counters and timings on screen. Never shows recognized text.":
         "変化領域・OCR 範囲・ルーターのスコア・件数・処理時間を画面に描きます。認識したテキストは表示しません。",
-    "Cloud identification (Gemini)": "クラウド識別（Gemini）",
-    "Use Google Gemini to identify animals, plants, landmarks and public figures": "Google Gemini で動植物・ランドマーク・著名人を識別する",
-    "API key saved in Keychain": "API キーはキーチェーンに保存済み",
-    "Gemini API key": "Gemini API キー",
-    "Replace": "置き換え",
-    "Save": "保存",
-    "Remove": "削除",
-    "Model": "モデル",
-    "Identify public figures named on screen": "画面に名前が出ている著名人を識別する",
-    "Nothing is sent until this is on and a key is saved, and never in Battery mode. Only a cropped image region (animals, plants, landmarks) or a name with nearby text (public figures) is sent — never the whole screen, never faces, never text containing secrets.":
-        "これをオンにしてキーを保存するまで、何も送信しません。省電力モードでも送信しません。送るのは切り抜いた画像の一部（動植物・ランドマーク）か、名前と周辺のテキスト（著名人）だけです。画面全体・顔・秘密情報を含むテキストは送りません。",
+    "On-device knowledge": "端末内の知識",
+    "Identify animals, plants, landmarks, dishes and products (estimate)": "動植物・ランドマーク・料理・製品を推定する",
+    "Identify public figures named on screen": "画面に名前が出ている著名人を推定する",
+    "Convert miles, °F, pounds… where the pointer rests": "ポインタを置いたところのマイル・°F・ポンドなどを換算する",
+    "Everything runs on this Mac; the app never sends anything over the network. The on-device model cannot see images — it guesses from image labels and nearby text, so names are marked “possibly” unless the screen shows them. Abbreviations defined on screen and common errors are explained even without Apple Intelligence.":
+        "すべてこの Mac の中で動き、ネットワークには何も送りません。端末内のモデルは画像を見られないため、画像の分類ラベルと周辺の文字から推定します。画面に名前が出ていない限り「かもしれません」と表示します。画面で定義された略語とよくあるエラーは、Apple Intelligence がなくても説明します。",
     "Movie, anime & news": "映画・アニメ・ニュース",
     "Movie / Anime mode (work card, cast on screen)": "映画・アニメモード（作品カード、画面上のキャスト）",
     "Spoilers": "ネタバレ",
@@ -101,22 +96,21 @@ JA = {
     "2 — Light": "2 — 軽め",
     "3 — Unrestricted": "3 — 制限なし",
     "News mode (background of the story)": "ニュースモード（ニュースの背景）",
-    "Work cards and news backgrounds use Gemini (window title or headline only). Without it, News mode shows related pages you read earlier. Both need “Remember pages you read”. “Up to where I am” uses the episode number in the title; without one it behaves like “No spoilers”.":
-        "作品カードとニュースの背景には Gemini を使います（送るのはウィンドウタイトルか見出しだけ）。Gemini がない場合、ニュースモードは以前に読んだ関連ページを表示します。どちらも「読んだページを記録する」が必要です。「見ているところまで」はタイトルの話数を使い、話数がなければ「ネタバレなし」と同じ動作になります。",
+    "Work cards and news backgrounds come from the on-device model’s own knowledge (well-known works only; it does not know recent news). News mode also lists related pages you read earlier. Both need “Remember pages you read”. “Up to where I am” uses the episode number in the title; without one it behaves like “No spoilers”.":
+        "作品カードとニュースの背景は、端末内のモデルが持つ知識から作ります（有名な作品のみ。最近のニュースは知りません）。ニュースモードでは以前に読んだ関連ページも表示します。どちらも「読んだページを記録する」が必要です。「見ているところまで」はタイトルの話数を使い、話数がなければ「ネタバレなし」と同じ動作になります。",
     "Screen sharing": "画面共有",
     "Warn about secrets while sharing the screen": "画面共有中に秘密情報を警告する",
     "Cover secrets while sharing (experimental)": "画面共有中に秘密情報を隠す（実験的）",
     "API keys, private keys, tokens, card numbers and passwords are detected on-device. Their values are never stored or shown. Text containing them is never translated or archived.":
         "API キー・秘密鍵・トークン・カード番号・パスワードを端末内で検出します。値そのものは保存も表示もしません。それらを含むテキストは翻訳も記録もしません。",
     "Privacy": "プライバシー",
-    "Screen content is processed in memory on this Mac. Screen images are never saved. Nothing is sent over the network unless you turn on Cloud identification.":
-        "画面の内容はこの Mac のメモリ上で処理します。画面画像は保存しません。クラウド識別をオンにしない限り、ネットワークには何も送りません。",
+    "Screen content is processed in memory on this Mac. Screen images are never saved. Nothing is ever sent over the network.":
+        "画面の内容はこの Mac のメモリ上で処理します。画面画像は保存しません。ネットワークには何も送りません。",
     # Onboarding
     "◢ FIELD MANUAL": "◢ FIELD MANUAL",
     "Briefing": "概要",
     "Screen access": "画面へのアクセス",
     "Apple Intelligence": "Apple Intelligence",
-    "Cloud (optional)": "クラウド（任意）",
     "Ambient Screen Intelligence watches your screen with you and quietly adds what you would have searched for — a translation, a term, the cause of an error, who is on screen.":
         "Ambient Screen Intelligence はあなたと一緒に画面を見て、調べようとしていたこと — 翻訳、用語、エラーの原因、画面に映っている人 — をそっと補足します。",
     "It prefers to show nothing. Most of the time you will not notice it; a card appears only when it is likely to be worth it, and fades after a few seconds.":
@@ -134,10 +128,12 @@ JA = {
         "Apple Intelligence（macOS 26）があれば、専門用語・エラー・コードの解説、ひとことメモ、作業セッションの命名、迷うカードの判定も行います。すべて端末内で動きます。",
     "Open Apple Intelligence settings": "Apple Intelligence の設定を開く",
     "Everything else works without it.": "それ以外の機能は Apple Intelligence なしで使えます。",
-    "Optional: Google Gemini can identify animals, plants, landmarks, products and public figures, describe the film you are watching and give the background of news stories.":
-        "任意: Google Gemini を使うと、動植物・ランドマーク・製品・著名人の識別、見ている作品の紹介、ニュースの背景の表示ができます。",
-    "It is off until you enable it and save your API key. Only cropped image regions, names, window titles or headlines are sent — never the whole screen, never faces, never text with secrets.":
-        "オンにして API キーを保存するまでは使いません。送るのは切り抜いた画像の一部・名前・ウィンドウタイトル・見出しだけで、画面全体・顔・秘密情報を含むテキストは送りません。",
+    "Everything happens on this Mac. The app has no cloud features and never sends screen content anywhere.":
+        "すべてこの Mac の中で行います。クラウドの機能はなく、画面の内容をどこにも送りません。",
+    "With Apple Intelligence it also guesses what an animal, plant, landmark, dish or product is, who a public figure named on screen is, which film you are watching and the background of a news story. The on-device model cannot see images and knows nothing recent, so these are estimates marked “possibly”.":
+        "Apple Intelligence があれば、動植物・ランドマーク・料理・製品が何か、画面に名前が出ている著名人が誰か、見ている作品、ニュースの背景も推定します。端末内のモデルは画像を見られず最近の出来事も知らないため、これらは「かもしれません」付きの推定です。",
+    "Without it, the app still converts units where the pointer rests, expands abbreviations defined earlier on screen and gives hints for common errors.":
+        "Apple Intelligence がなくても、ポインタを置いたところの単位換算、以前に画面で定義された略語の展開、よくあるエラーのヒントは使えます。",
     "Open Settings": "設定を開く",
     "• Screen images are never written to disk.": "• 画面画像はディスクに保存しません。",
     "• Only what a card showed, plus page titles and URLs (if enabled), is archived — on this Mac, excluded from backups, deletable at any time.":
@@ -151,8 +147,8 @@ JA = {
     "PERMISSION REQUIRED": "許可が必要",
     "APPLE INTELLIGENCE AVAILABLE": "APPLE INTELLIGENCE 利用可能",
     "NOT AVAILABLE ON THIS MAC": "この MAC では利用不可",
-    "GEMINI ENABLED": "GEMINI 有効",
-    "OFF (OPTIONAL)": "オフ（任意）",
+    "ON-DEVICE KNOWLEDGE READY": "端末内の知識: 利用可能",
+    "RULES ONLY (NO APPLE INTELLIGENCE)": "ルールのみ（APPLE INTELLIGENCE なし）",
     # VoiceOver
     "Ambient Screen Intelligence: %@. %@": "Ambient Screen Intelligence: %@。%@",
 }

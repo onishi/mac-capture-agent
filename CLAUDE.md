@@ -1,12 +1,13 @@
 # CLAUDE.md — 開発ルール
 
-Ambient Screen Intelligence: macOS の画面を常時観察し、価値があるときだけ HUD で補足する Local First のメニューバーアプリ。
+Ambient Screen Intelligence: macOS の画面を常時観察し、価値があるときだけ HUD で補足する Local Only のメニューバーアプリ。
 
 ## 文書
 
 - 要件: `docs/SPEC.md`（要件 ID と実装状態）
 - 設計: `docs/ARCHITECTURE.md`（構成・データ・プライバシー）
 - 計画: `docs/ROADMAP.md`（マイルストーン・完了条件・判断事項・実機チェックリスト）
+- ローカル AI: `docs/LOCAL_AI.md`（3 段構成・推定の表示ルール・アイデア一覧 LA-*）
 - 着手用プロンプト: `docs/IMPLEMENTATION_PROMPT.md`
 
 ## 構成
@@ -30,6 +31,8 @@ Ambient Screen Intelligence: macOS の画面を常時観察し、価値がある
 - 新しいロジックはまず Core に値型・純粋関数として書き、テストを付ける。
 - Swift 5 言語モード。Swift Concurrency を使い、メインスレッドで解析しない。`@MainActor` は UI だけ。
 - 強制アンラップと `fatalError` を使わない。
-- 新しい権限・Entitlement・外部依存・ネットワーク通信は、`docs/ROADMAP.md` の判断事項を確認してから追加する。
+- クラウド LLM・外部 API は使わない。アプリは通信しない（ROADMAP D-7）。精度が低くてもローカル（ルール → Apple のオンデバイス ML → Foundation Models）で実装し、推定は推定と表示する。
+- LLM の自己申告の確度は信用しない。画面上の文字で裏付けがあるときだけ断定し、Apple Intelligence が無い環境でも動くルールの経路を残す。
+- 新しい権限・Entitlement・外部依存（ローカルモデルを含む）は、`docs/ROADMAP.md` の判断事項を確認してから追加する。
 - 機能を追加・変更したら `docs/SPEC.md` の状態列と `README.md` を更新する。
 - 実機での動作は未検証の部分が多い。実機で確認すべき点は報告に必ず書く。

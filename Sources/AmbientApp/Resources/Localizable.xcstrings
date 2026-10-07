@@ -67,17 +67,6 @@
         }
       }
     },
-    "API key saved in Keychain": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "API キーはキーチェーンに保存済み"
-          }
-        }
-      }
-    },
     "API keys, private keys, tokens, card numbers and passwords are detected on-device. Their values are never stored or shown. Text containing them is never translated or archived.": {
       "extractionState": "manual",
       "localizations": {
@@ -276,24 +265,13 @@
         }
       }
     },
-    "Cloud (optional)": {
+    "Convert miles, °F, pounds… where the pointer rests": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "クラウド（任意）"
-          }
-        }
-      }
-    },
-    "Cloud identification (Gemini)": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "クラウド識別（Gemini）"
+            "value": "ポインタを置いたところのマイル・°F・ポンドなどを換算する"
           }
         }
       }
@@ -364,6 +342,28 @@
         }
       }
     },
+    "Everything happens on this Mac. The app has no cloud features and never sends screen content anywhere.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべてこの Mac の中で行います。クラウドの機能はなく、画面の内容をどこにも送りません。"
+          }
+        }
+      }
+    },
+    "Everything runs on this Mac; the app never sends anything over the network. The on-device model cannot see images — it guesses from image labels and nearby text, so names are marked “possibly” unless the screen shows them. Abbreviations defined on screen and common errors are explained even without Apple Intelligence.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべてこの Mac の中で動き、ネットワークには何も送りません。端末内のモデルは画像を見られないため、画像の分類ラベルと周辺の文字から推定します。画面に名前が出ていない限り「かもしれません」と表示します。画面で定義された略語とよくあるエラーは、Apple Intelligence がなくても説明します。"
+          }
+        }
+      }
+    },
     "Excluded apps": {
       "extractionState": "manual",
       "localizations": {
@@ -404,28 +404,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "マウスポインタのあるディスプレイを追う"
-          }
-        }
-      }
-    },
-    "GEMINI ENABLED": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GEMINI 有効"
-          }
-        }
-      }
-    },
-    "Gemini API key": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gemini API キー"
           }
         }
       }
@@ -485,13 +463,24 @@
         }
       }
     },
+    "Identify animals, plants, landmarks, dishes and products (estimate)": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "動植物・ランドマーク・料理・製品を推定する"
+          }
+        }
+      }
+    },
     "Identify public figures named on screen": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "画面に名前が出ている著名人を識別する"
+            "value": "画面に名前が出ている著名人を推定する"
           }
         }
       }
@@ -503,17 +492,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "インテリジェンス"
-          }
-        }
-      }
-    },
-    "It is off until you enable it and save your API key. Only cropped image regions, names, window titles or headlines are sent — never the whole screen, never faces, never text with secrets.": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "オンにして API キーを保存するまでは使いません。送るのは切り抜いた画像の一部・名前・ウィンドウタイトル・見出しだけで、画面全体・顔・秘密情報を含むテキストは送りません。"
           }
         }
       }
@@ -558,17 +536,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "モード"
-          }
-        }
-      }
-    },
-    "Model": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "モデル"
           }
         }
       }
@@ -661,24 +628,13 @@
         }
       }
     },
-    "Nothing is sent until this is on and a key is saved, and never in Battery mode. Only a cropped image region (animals, plants, landmarks) or a name with nearby text (public figures) is sent — never the whole screen, never faces, never text containing secrets.": {
+    "ON-DEVICE KNOWLEDGE READY": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "これをオンにしてキーを保存するまで、何も送信しません。省電力モードでも送信しません。送るのは切り抜いた画像の一部（動植物・ランドマーク）か、名前と周辺のテキスト（著名人）だけです。画面全体・顔・秘密情報を含むテキストは送りません。"
-          }
-        }
-      }
-    },
-    "OFF (OPTIONAL)": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "オフ（任意）"
+            "value": "端末内の知識: 利用可能"
           }
         }
       }
@@ -690,6 +646,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "前回の続きを提案する"
+          }
+        }
+      }
+    },
+    "On-device knowledge": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端末内の知識"
           }
         }
       }
@@ -734,17 +701,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "翻訳言語を開く"
-          }
-        }
-      }
-    },
-    "Optional: Google Gemini can identify animals, plants, landmarks, products and public figures, describe the film you are watching and give the background of news stories.": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "任意: Google Gemini を使うと、動植物・ランドマーク・製品・著名人の識別、見ている作品の紹介、ニュースの背景の表示ができます。"
           }
         }
       }
@@ -925,6 +881,17 @@
         }
       }
     },
+    "RULES ONLY (NO APPLE INTELLIGENCE)": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ルールのみ（APPLE INTELLIGENCE なし）"
+          }
+        }
+      }
+    },
     "Read the URL of the front browser tab": {
       "extractionState": "manual",
       "localizations": {
@@ -943,28 +910,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "読んだページを記録する（タイトル・URL・閲覧時間）"
-          }
-        }
-      }
-    },
-    "Remove": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "削除"
-          }
-        }
-      }
-    },
-    "Replace": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "置き換え"
           }
         }
       }
@@ -1024,17 +969,6 @@
         }
       }
     },
-    "Save": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保存"
-          }
-        }
-      }
-    },
     "Screen Recording permission is required to start.": {
       "extractionState": "manual",
       "localizations": {
@@ -1068,13 +1002,13 @@
         }
       }
     },
-    "Screen content is processed in memory on this Mac. Screen images are never saved. Nothing is sent over the network unless you turn on Cloud identification.": {
+    "Screen content is processed in memory on this Mac. Screen images are never saved. Nothing is ever sent over the network.": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "画面の内容はこの Mac のメモリ上で処理します。画面画像は保存しません。クラウド識別をオンにしない限り、ネットワークには何も送りません。"
+            "value": "画面の内容はこの Mac のメモリ上で処理します。画面画像は保存しません。ネットワークには何も送りません。"
           }
         }
       }
@@ -1233,17 +1167,6 @@
         }
       }
     },
-    "Use Google Gemini to identify animals, plants, landmarks and public figures": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Google Gemini で動植物・ランドマーク・著名人を識別する"
-          }
-        }
-      }
-    },
     "Visual memory": {
       "extractionState": "manual",
       "localizations": {
@@ -1288,13 +1211,35 @@
         }
       }
     },
-    "Work cards and news backgrounds use Gemini (window title or headline only). Without it, News mode shows related pages you read earlier. Both need “Remember pages you read”. “Up to where I am” uses the episode number in the title; without one it behaves like “No spoilers”.": {
+    "With Apple Intelligence it also guesses what an animal, plant, landmark, dish or product is, who a public figure named on screen is, which film you are watching and the background of a news story. The on-device model cannot see images and knows nothing recent, so these are estimates marked “possibly”.": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "作品カードとニュースの背景には Gemini を使います（送るのはウィンドウタイトルか見出しだけ）。Gemini がない場合、ニュースモードは以前に読んだ関連ページを表示します。どちらも「読んだページを記録する」が必要です。「見ているところまで」はタイトルの話数を使い、話数がなければ「ネタバレなし」と同じ動作になります。"
+            "value": "Apple Intelligence があれば、動植物・ランドマーク・料理・製品が何か、画面に名前が出ている著名人が誰か、見ている作品、ニュースの背景も推定します。端末内のモデルは画像を見られず最近の出来事も知らないため、これらは「かもしれません」付きの推定です。"
+          }
+        }
+      }
+    },
+    "Without it, the app still converts units where the pointer rests, expands abbreviations defined earlier on screen and gives hints for common errors.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence がなくても、ポインタを置いたところの単位換算、以前に画面で定義された略語の展開、よくあるエラーのヒントは使えます。"
+          }
+        }
+      }
+    },
+    "Work cards and news backgrounds come from the on-device model’s own knowledge (well-known works only; it does not know recent news). News mode also lists related pages you read earlier. Both need “Remember pages you read”. “Up to where I am” uses the episode number in the title; without one it behaves like “No spoilers”.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作品カードとニュースの背景は、端末内のモデルが持つ知識から作ります（有名な作品のみ。最近のニュースは知りません）。ニュースモードでは以前に読んだ関連ページも表示します。どちらも「読んだページを記録する」が必要です。「見ているところまで」はタイトルの話数を使い、話数がなければ「ネタバレなし」と同じ動作になります。"
           }
         }
       }

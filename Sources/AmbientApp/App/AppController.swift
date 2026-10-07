@@ -29,8 +29,6 @@ final class AppController: ObservableObject {
     /// Opens the archive's sessions tab.
     var openSessions: (() -> Void)?
     private let tracker: ActivityTracker
-    private let networkGate: NetworkGate
-    private let gemini: GeminiProvider
     private let mediaContext = MediaContext()
     private var contextIntel: ContextIntelCoordinator?
     private var wakeObserver: NSObjectProtocol?
@@ -69,15 +67,12 @@ final class AppController: ObservableObject {
             embedding: NLTextEmbedding()
         )
         tracker = ActivityTracker(store: memoryStore, foreground: foreground, namer: reasoner)
-        networkGate = NetworkGate(policy: Self.networkPolicy(for: settings)) { [weak settings] record in
-            DispatchQueue.main.async { settings?.appendSentRecord(record) }
-        }
-        gemini = GeminiProvider(gate: networkGate)
-        gemini.configure(available: Self.networkPolicy(for: settings).isUsable, model: settings.geminiModel)
+        // v0.8–v0.10 could store a Gemini API key; the app no longer uses the cloud.
+        LegacyCloudCleanup.removeStoredAPIKey()
         let overlayForContext = overlay
         let coordinator = ContextIntelCoordinator(
             store: memoryStore,
-            research: gemini,
+            research: reasoner,
             media: mediaContext,
             configuration: Self.contextConfiguration(for: settings)
         ) { message in
@@ -215,7 +210,7 @@ final class AppController: ObservableObject {
         await capture.stop()
     }
 
-    // MARK: Cloud
+    // MARK: Context intel
 
     private static func contextConfiguration(for settings: AppSettings) -> ContextIntelCoordinator.Configuration {
         ContextIntelCoordinator.Configuration(
@@ -225,10 +220,6 @@ final class AppController: ObservableObject {
             targetLanguage: settings.targetLanguage,
             memoryEnabled: settings.memoryEnabled
         )
-    }
-
-    private static func networkPolicy(for settings: AppSettings) -> NetworkPolicy {
-        NetworkPolicy(cloudEnabled: settings.cloudEnabled, hasAPIKey: settings.hasGeminiKey, performanceMode: settings.performanceMode)
     }
 
     // MARK: Resume
@@ -339,7 +330,7 @@ final class AppController: ObservableObject {
         case .webSearch, .wikipedia:
             recordFeedback(.searched, for: message)
             let name = message.title
-                .replacingOccurrences(of: "（の可能性があります）", with: "")
+                .replacingOccurrences(of: "（かもしれません）", with: "")
                 .replacingOccurrences(of: " (possibly)", with: "")
             let query = message.kind == .identification && !message.original.isEmpty ? message.original : name
             let url = action == .webSearch
@@ -418,10 +409,6 @@ final class AppController: ObservableObject {
 
     private func settingsDidChange() {
         screenShare.setPretend(settings.pretendScreenSharing)
-        let policy = Self.networkPolicy(for: settings)
-        let gate = networkGate
-        Task { await gate.update(policy) }
-        gemini.configure(available: policy.isUsable, model: settings.geminiModel)
         let contextConfiguration = Self.contextConfiguration(for: settings)
         let coordinator = contextIntel
         Task { await coordinator?.update(contextConfiguration) }
@@ -485,7 +472,7 @@ final class AppController: ObservableObject {
             screenShare: screenShare,
             page: tracker.page,
             media: mediaContext,
-            cloud: gemini,
+            identifier: reasoner,
             displayID: displayID,
             present: { event in
                 await MainActor.run { [weak self] in

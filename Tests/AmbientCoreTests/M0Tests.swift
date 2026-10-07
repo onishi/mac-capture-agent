@@ -80,17 +80,17 @@ final class HUDGrowTests: XCTestCase {
 
 final class OnboardingTests: XCTestCase {
     func testStatusesAndFinish() {
-        var state = OnboardingState(screenRecordingGranted: false, appleIntelligenceAvailable: false, cloudConfigured: false)
+        var state = OnboardingState(screenRecordingGranted: false, appleIntelligenceAvailable: false)
         XCTAssertEqual(state.status(of: .screenAccess), .pending)
         XCTAssertEqual(state.status(of: .appleIntelligence), .unavailable)
-        XCTAssertEqual(state.status(of: .cloud), .optional)
+        XCTAssertEqual(state.status(of: .localKnowledge), .pending)
         XCTAssertFalse(state.canFinish)
         XCTAssertEqual(state.nextStep, .briefing)
         state.visitedSteps.insert(.briefing)
         XCTAssertEqual(state.nextStep, .screenAccess)
         state.screenRecordingGranted = true
         XCTAssertTrue(state.canFinish, "only screen access is required")
-        XCTAssertEqual(OnboardingStep.cloud.code, "05")
+        XCTAssertEqual(OnboardingStep.localKnowledge.code, "05")
     }
 }
 

@@ -21,8 +21,7 @@ final class OnboardingModel: ObservableObject {
         self.onFinish = onFinish
         state = OnboardingState(
             screenRecordingGranted: ScreenCaptureManager.hasPermission,
-            appleIntelligenceAvailable: appleIntelligenceAvailable,
-            cloudConfigured: settings.cloudEnabled && settings.hasGeminiKey
+            appleIntelligenceAvailable: appleIntelligenceAvailable
         )
         // The permission can be granted in System Settings while the guide is open.
         pollTask = Task { [weak self] in
@@ -50,7 +49,6 @@ final class OnboardingModel: ObservableObject {
 
     func refresh() {
         state.screenRecordingGranted = ScreenCaptureManager.hasPermission
-        state.cloudConfigured = settings.cloudEnabled && settings.hasGeminiKey
     }
 
     func requestScreenRecording() {
@@ -191,10 +189,11 @@ struct OnboardingView: View {
                 actionButton("Open Apple Intelligence settings", action: model.openAppleIntelligenceSettings)
                 paragraph("Everything else works without it.")
             }
-        case .cloud:
-            paragraph("Optional: Google Gemini can identify animals, plants, landmarks, products and public figures, describe the film you are watching and give the background of news stories.")
-            paragraph("It is off until you enable it and save your API key. Only cropped image regions, names, window titles or headlines are sent — never the whole screen, never faces, never text with secrets.")
-            statusLine(model.state.cloudConfigured ? "GEMINI ENABLED" : "OFF (OPTIONAL)", ok: model.state.cloudConfigured)
+        case .localKnowledge:
+            paragraph("Everything happens on this Mac. The app has no cloud features and never sends screen content anywhere.")
+            paragraph("With Apple Intelligence it also guesses what an animal, plant, landmark, dish or product is, who a public figure named on screen is, which film you are watching and the background of a news story. The on-device model cannot see images and knows nothing recent, so these are estimates marked “possibly”.")
+            paragraph("Without it, the app still converts units where the pointer rests, expands abbreviations defined earlier on screen and gives hints for common errors.")
+            statusLine(model.state.appleIntelligenceAvailable ? "ON-DEVICE KNOWLEDGE READY" : "RULES ONLY (NO APPLE INTELLIGENCE)", ok: model.state.appleIntelligenceAvailable)
             actionButton("Open Settings", action: model.showSettings)
         case .privacy:
             paragraph("• Screen images are never written to disk.")
@@ -257,7 +256,7 @@ struct OnboardingView: View {
         case .screenAccess: return "Screen access"
         case .translation: return "Translation"
         case .appleIntelligence: return "Apple Intelligence"
-        case .cloud: return "Cloud (optional)"
+        case .localKnowledge: return "On-device knowledge"
         case .privacy: return "Privacy"
         }
     }

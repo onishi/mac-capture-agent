@@ -6,7 +6,8 @@ public enum OnboardingStep: Int, CaseIterable, Sendable, Identifiable {
     case screenAccess
     case translation
     case appleIntelligence
-    case cloud
+    /// What the on-device knowledge can and cannot do (no cloud, estimates).
+    case localKnowledge
     case privacy
 
     public var id: Int { rawValue }
@@ -27,26 +28,22 @@ public enum OnboardingStatus: String, Sendable, Equatable {
 public struct OnboardingState: Sendable, Equatable {
     public var screenRecordingGranted: Bool
     public var appleIntelligenceAvailable: Bool
-    public var cloudConfigured: Bool
     public var visitedSteps: Set<OnboardingStep>
 
-    public init(screenRecordingGranted: Bool, appleIntelligenceAvailable: Bool, cloudConfigured: Bool, visitedSteps: Set<OnboardingStep> = []) {
+    public init(screenRecordingGranted: Bool, appleIntelligenceAvailable: Bool, visitedSteps: Set<OnboardingStep> = []) {
         self.screenRecordingGranted = screenRecordingGranted
         self.appleIntelligenceAvailable = appleIntelligenceAvailable
-        self.cloudConfigured = cloudConfigured
         self.visitedSteps = visitedSteps
     }
 
     public func status(of step: OnboardingStep) -> OnboardingStatus {
         switch step {
-        case .briefing, .privacy, .translation:
+        case .briefing, .privacy, .translation, .localKnowledge:
             return visitedSteps.contains(step) ? .done : .pending
         case .screenAccess:
             return screenRecordingGranted ? .done : .pending
         case .appleIntelligence:
             return appleIntelligenceAvailable ? .done : .unavailable
-        case .cloud:
-            return cloudConfigured ? .done : .optional
         }
     }
 

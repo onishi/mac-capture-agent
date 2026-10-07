@@ -1,9 +1,10 @@
 import Foundation
 
 /// Page-level intel, triggered when the front page changes (not by pixels):
-/// - Movie / Anime mode: a work card once per work per day (Gemini).
-/// - News mode: the background of a news story (Gemini with Google Search),
-///   or, offline, earlier related reading from the archive.
+/// - Movie / Anime mode: a work card once per work per day (on-device model's
+///   knowledge; well-known works only).
+/// - News mode: general background of what the headline names (on-device
+///   model) together with earlier related reading from the archive.
 actor ContextIntelCoordinator {
     struct Configuration: Sendable, Equatable {
         var mediaEnabled: Bool
@@ -67,7 +68,7 @@ actor ContextIntelCoordinator {
                 let accepted = MediaPolicy.accept(answer)
                 let json = accepted ? (try? JSONEncoder().encode(answer)).map { String(decoding: $0, as: UTF8.self) } : nil
                 await store.saveKnowledge(entity: cacheEntity, summary: accepted ? answer.title : TermExplanationSanitizer.declinedMarker,
-                                          detail: json, source: "gemini", ttl: 7 * 24 * 3600)
+                                          detail: json, source: "on-device", ttl: 7 * 24 * 3600)
                 info = accepted ? answer : nil
             } catch {
                 Log.app.error("Work lookup failed: \(String(describing: error), privacy: .public)")
@@ -105,36 +106,44 @@ actor ContextIntelCoordinator {
     private func showNews(headline: String, url: URL?, now: TimeInterval) async {
         guard shown.checkAndRecord("news:" + (url?.absoluteString ?? headline), now: now) else { return }
         let japanese = LanguageCode.base(configuration.targetLanguage) == "ja"
+        var lines: [String] = []
 
+        // General background from the on-device model (it cannot know the event itself).
+        var hasBackground = false
         if let research, research.isAvailable {
             do {
                 let context = try await research.newsContext(headline: headline, targetLanguage: configuration.targetLanguage)
-                guard context.isNewsStory, !context.background.isEmpty else { return }
-                var lines = [context.background]
-                lines += context.timeline.prefix(3).map { "\($0.date)  \($0.event)" }
-                if !context.relatedPeople.isEmpty {
-                    lines.append((japanese ? "関連人物 " : "People ") + "\(context.relatedPeople.count)" + (japanese ? "名: " : ": ")
-                                 + context.relatedPeople.prefix(3).joined(separator: ", "))
+                if context.isNewsStory, !context.background.isEmpty {
+                    hasBackground = true
+                    lines.append(context.background)
+                    if !context.relatedPeople.isEmpty {
+                        lines.append((japanese ? "関連人物 " : "People ") + context.relatedPeople.prefix(3).joined(separator: ", "))
+                    }
                 }
-                await present(HUDMessage(kind: .newsContext, title: japanese ? "この出来事について" : "About this story",
-                                         original: headline, detail: lines.joined(separator: "\n"), anchor: nil,
-                                         targetLanguage: configuration.targetLanguage))
-                return
             } catch {
                 Log.app.error("News background failed: \(String(describing: error), privacy: .public)")
             }
         }
 
-        // Offline: earlier related reading from the archive.
-        guard configuration.memoryEnabled else { return }
-        let related = await store.relatedPages(keywords: MediaPolicy.keywords(fromHeadline: headline), excludingURL: url,
-                                               since: Date().addingTimeInterval(-30 * 24 * 3600))
-        guard !related.isEmpty else { return }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.locale = Locale(identifier: configuration.targetLanguage)
-        let lines = related.map { "\(formatter.localizedString(for: $0.start, relativeTo: Date()))  \($0.title ?? "")" }
-        await present(HUDMessage(kind: .newsContext, title: japanese ? "関連して読んだ記事" : "Related reading",
-                                 original: headline, detail: lines.joined(separator: "\n"), anchor: nil,
-                                 targetLanguage: configuration.targetLanguage))
+        // The timeline comes from the user's own reading history.
+        if configuration.memoryEnabled {
+            let related = await store.relatedPages(keywords: MediaPolicy.keywords(fromHeadline: headline), excludingURL: url,
+                                                   since: Date().addingTimeInterval(-30 * 24 * 3600))
+            if !related.isEmpty {
+                let formatter = RelativeDateTimeFormatter()
+                formatter.locale = Locale(identifier: configuration.targetLanguage)
+                if hasBackground { lines.append(japanese ? "以前に読んだ関連記事:" : "Read earlier:") }
+                lines += related.map { "\(formatter.localizedString(for: $0.start, relativeTo: Date()))  \($0.title ?? "")" }
+            }
+        }
+        guard !lines.isEmpty else { return }
+        let title: String
+        if hasBackground {
+            title = japanese ? "この話題の背景（端末内の推定）" : "Background (on-device estimate)"
+        } else {
+            title = japanese ? "関連して読んだ記事" : "Related reading"
+        }
+        await present(HUDMessage(kind: .newsContext, title: title, original: headline, detail: lines.joined(separator: "\n"),
+                                 anchor: nil, targetLanguage: configuration.targetLanguage))
     }
 }

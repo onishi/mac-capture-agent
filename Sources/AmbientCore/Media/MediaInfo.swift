@@ -10,7 +10,8 @@ public struct CastMember: Codable, Sendable, Equatable {
     }
 }
 
-/// What Gemini knows about the work being watched.
+/// What the on-device model knows about the work being watched (an estimate:
+/// only well-known works up to the model's training data).
 public struct MediaInfoAnswer: Codable, Sendable, Equatable {
     public var isKnownWork: Bool
     public var title: String
@@ -22,33 +23,25 @@ public struct MediaInfoAnswer: Codable, Sendable, Equatable {
     public var synopsis: String      // spoiler-safe per the requested level
     public var confidence: Double
 
-    public static var schema: [String: Any] {
-        [
-            "type": "OBJECT",
-            "properties": [
-                "isKnownWork": ["type": "BOOLEAN"],
-                "title": ["type": "STRING"],
-                "kind": ["type": "STRING", "enum": ["movie", "anime", "series", "video"]],
-                "year": ["type": "STRING"],
-                "originalWork": ["type": "STRING"],
-                "cast": ["type": "ARRAY", "items": [
-                    "type": "OBJECT",
-                    "properties": ["character": ["type": "STRING"], "performer": ["type": "STRING"]],
-                    "required": ["character", "performer"]
-                ]],
-                "music": ["type": "ARRAY", "items": ["type": "STRING"]],
-                "synopsis": ["type": "STRING"],
-                "confidence": ["type": "NUMBER"]
-            ],
-            "required": ["isKnownWork", "title", "kind", "year", "originalWork", "cast", "music", "synopsis", "confidence"]
-        ]
+    public init(isKnownWork: Bool, title: String, kind: String, year: String, originalWork: String,
+                cast: [CastMember], music: [String], synopsis: String, confidence: Double) {
+        self.isKnownWork = isKnownWork
+        self.title = title
+        self.kind = kind
+        self.year = year
+        self.originalWork = originalWork
+        self.cast = cast
+        self.music = music
+        self.synopsis = synopsis
+        self.confidence = confidence
     }
 
     public static func instructions(spoiler: SpoilerLevel, episode: Int?, targetLanguage: String) -> String {
         """
         The user started watching something; you get its window title. If it is a published film, TV series or \
-        anime you know well, fill in the fields; for ordinary online videos (vlogs, news clips, tutorials) or when \
-        unsure, set isKnownWork to false. cast: up to 6 main characters with the actor or voice actor. \
+        anime you know well, fill in the fields from what you are sure of; for ordinary online videos (vlogs, news \
+        clips, tutorials), works you do not know, or when unsure, set isKnownWork to false. Leave a field empty \
+        rather than guessing. cast: up to 6 main characters with the actor or voice actor. \
         music: up to 2 theme songs. synopsis: at most 2 sentences. \(spoiler.instruction(episode: episode)) \
         Answer in the language with code "\(targetLanguage)" (keep proper names as commonly written).
         """
@@ -107,27 +100,42 @@ public enum NewsDetector {
 public struct NewsEvent: Codable, Sendable, Equatable {
     public var date: String
     public var event: String
+
+    public init(date: String, event: String) {
+        self.date = date
+        self.event = event
+    }
 }
 
-/// Background for a news story (Gemini with Google Search grounding).
+/// Background for a news story from the on-device model's general knowledge.
+/// It cannot know recent events, so the timeline comes from the user's own
+/// reading history instead (ContextIntelCoordinator).
 public struct NewsContextAnswer: Codable, Sendable, Equatable {
     public var isNewsStory: Bool
     public var background: String
     public var timeline: [NewsEvent]
     public var relatedPeople: [String]
 
+    public init(isNewsStory: Bool, background: String, timeline: [NewsEvent], relatedPeople: [String]) {
+        self.isNewsStory = isNewsStory
+        self.background = background
+        self.timeline = timeline
+        self.relatedPeople = relatedPeople
+    }
+
     public static func instructions(targetLanguage: String) -> String {
         """
-        The user is reading a news article with the headline below. Using current search results, explain the \
-        background briefly. Return ONLY a JSON object with these keys: "isNewsStory" (boolean), "background" \
-        (one or two sentences), "timeline" (up to 3 objects {"date": "YYYY-MM or YYYY-MM-DD", "event": short text}, \
-        oldest first, starting with how it began), "relatedPeople" (up to 5 names). If it is not a news story, \
-        set isNewsStory to false. Answer in the language with code "\(targetLanguage)".
+        The user is reading a news article with the headline below. You have no access to current news, so do \
+        NOT describe the event itself or anything that may have happened recently. Instead give one or two \
+        sentences of general, long-established background on the main organization, place, law or concept \
+        named in the headline (what it is, why it matters). If there is nothing you are sure of, or it is not \
+        a news story, set isNewsStory to false. timeline: leave empty. relatedPeople: up to 5 well-known people \
+        named in or clearly tied to the headline. Answer in the language with code "\(targetLanguage)".
         """
     }
 }
 
-/// Media and news research in the cloud (Gemini in the app).
+/// Media and news knowledge on-device (Foundation Models in the app).
 public protocol MediaResearching: Sendable {
     var isAvailable: Bool { get }
     func mediaInfo(for reference: MediaReference, spoiler: SpoilerLevel, targetLanguage: String) async throws -> MediaInfoAnswer

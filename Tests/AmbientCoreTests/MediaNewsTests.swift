@@ -67,23 +67,16 @@ final class NewsTests: XCTestCase {
         XCTAssertNil(NewsDetector.headline(from: "Reuters"))
     }
 
-    func testGroundedJSONExtraction() throws {
-        let text = "Here you go:\n```json\n{\"isNewsStory\": true, \"background\": \"It began in March {2026}.\", \"timeline\": [{\"date\": \"2026-03\", \"event\": \"Start\"}], \"relatedPeople\": [\"A\", \"B\"]}\n```"
-        let data = try XCTUnwrap(GeminiAPI.extractJSONObject(from: text))
-        let answer = try JSONDecoder().decode(NewsContextAnswer.self, from: data)
-        XCTAssertEqual(answer.timeline.first?.date, "2026-03")
-        XCTAssertEqual(answer.background, "It began in March {2026}.")
-        XCTAssertNil(GeminiAPI.extractJSONObject(from: "no json"))
-
-        let response = try JSONSerialization.data(withJSONObject: ["candidates": [["content": ["parts": [["text": text]]]]]])
-        XCTAssertEqual(try GeminiAPI.decodeAnswer(NewsContextAnswer.self, from: response).relatedPeople, ["A", "B"])
+    func testLocalNewsInstructionsAvoidRecentEvents() {
+        let instructions = NewsContextAnswer.instructions(targetLanguage: "ja")
+        XCTAssertTrue(instructions.contains("no access to current news"))
+        XCTAssertTrue(instructions.contains("\"ja\""))
     }
 
-    func testGroundedBodyHasSearchTool() throws {
-        let body = try GeminiAPI.groundedRequestBody(system: "s", prompt: "p")
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertNotNil((json["tools"] as? [[String: Any]])?.first?["google_search"])
-        XCTAssertNil((json["generationConfig"] as? [String: Any])?["responseSchema"])
+    func testNewsAnswerRoundTrip() throws {
+        let answer = NewsContextAnswer(isNewsStory: true, background: "b", timeline: [NewsEvent(date: "2026-03", event: "e")], relatedPeople: ["A"])
+        let decoded = try JSONDecoder().decode(NewsContextAnswer.self, from: JSONEncoder().encode(answer))
+        XCTAssertEqual(decoded, answer)
     }
 
     func testProductCategory() {

@@ -1,6 +1,8 @@
 # 技術構成・データ設計・プライバシー設計
 
-要件は [SPEC.md](SPEC.md)、実装状況と残作業は [ROADMAP.md](ROADMAP.md)。本書は v0.10 の実装を説明し、未実装の構想は「将来案」と明記する。アプリの実機動作と性能目標は未検証。
+要件は [SPEC.md](SPEC.md)、実装状況と残作業は [ROADMAP.md](ROADMAP.md)、ローカル AI の方針とアイデアは [LOCAL_AI.md](LOCAL_AI.md)。本書は v0.11 の実装を説明し、未実装の構想は「将来案」と明記する。アプリの実機動作と性能目標は未検証。
+
+**v0.11 の設計変更（D-7）**: クラウド LLM（Gemini）と通信層（`NetworkGate`）を削除し、アプリは一切通信しない。旧クラウド機能（識別・公人・作品・ニュース）は Foundation Models の知識による「推定」に置き換え、AI が使えない環境向けにルールだけで動く機能（略語の展開・単位換算・エラーのヒント）を追加した。
 
 ---
 
@@ -10,15 +12,16 @@
 | --- | --- | --- |
 | 言語 / UI | Swift 5 モード、SwiftUI ＋ AppKit | Swift Concurrency（actor / async） |
 | 画面取得 | ScreenCaptureKit (`SCStream`) | BGRA、IOSurface のままメモリで処理 |
-| 画像解析 | Vision（OCR・画像分類）、Core ML（将来） | |
+| 画像解析 | Vision（OCR・画像分類・顔の有無・バーコード） | 分類ラベルは識別の手がかりとして LLM にテキストで渡す。Core ML / MLX のローカル VLM は将来案（D-8） |
 | 言語 | NaturalLanguage（言語判定・文埋め込み・固有名詞抽出） | |
 | 翻訳 | Translation framework | macOS 26 は `TranslationSession` 直接、15 は SwiftUI ブリッジ |
-| ローカル LLM | Foundation Models（macOS 26 + Apple Intelligence） | BRIEF、用語・エラー・コードの説明、判断が割れる候補の判定、セッション名 |
+| ローカル LLM | Foundation Models（macOS 26 + Apple Intelligence） | BRIEF、用語・エラー・コードの説明、判断が割れる候補の判定、セッション名、識別・公人・作品・ニュース背景の推定（v0.11） |
+| ルール | `AmbientCore` の純粋関数 | 略語の定義の抽出（`AcronymGlossary`）、単位換算（`UnitConverter`）、エラーのヒント（`ErrorHints`）など、AI なしで動く経路 |
 | 永続化 | SQLite（GRDB 7、ROADMAP D-1 で決定） | `Sources/AmbientStore`。Linux 非対応のためテストは macOS CI |
 | ベクトル検索 | SQLite から候補を最大 2,000 件取得し、埋め込みの類似度などで再順位付け | 大規模化した場合の索引は将来案 |
-| クラウド AI | `GeminiProvider` と `NetworkGate` | 設定で有効化し、API キーがある場合のみ。Battery モードでは通信しない |
+| クラウド AI | なし（v0.11 で削除、D-7） | ネットワーク Entitlement もない。WEB / WIKI はブラウザで開くだけ |
 | CI | GitHub Actions: Linux でコアのテスト、macOS 15 / 26 でアプリのビルドとテスト | |
-| 対応 OS | macOS 15 以上（BRIEF は macOS 26） | Apple Silicon 主対象 |
+| 対応 OS | macOS 15 以上（Foundation Models を使う機能は macOS 26） | Apple Silicon 主対象 |
 
 外部依存は GRDB 7 のみ。追加する場合は ROADMAP の判断事項として扱う。
 
@@ -26,7 +29,7 @@
 
 ## 2. 処理パイプライン
 
-### 2.1 現状（v0.10）
+### 2.1 現状（v0.11）
 
 ```
 ScreenCaptureKit (5–30fps, 除外アプリと自分の HUD は画像から除去)
@@ -40,11 +43,29 @@ ScreenCaptureKit (5–30fps, 除外アプリと自分の HUD は画像から除�
          └→ IntelStore (表示した内容を SQLite に記録)
 ```
 
-この経路に、ポインタ滞在からの優先解析、QR・顔の有無・秘密情報の検出、Coding Mode の説明、画面共有中の警告、必要時の Gemini 識別が加わる。別経路の `ActivityTracker` は前面ページを 2 秒ごとに観測し、閲覧記録・ブックマーク・作業セッションを作る。`ContextIntelCoordinator` はページ変更時に作品・ニュースのカードを判断する。
+この経路に、ポインタ滞在からの優先解析と単位換算、QR・顔の有無・秘密情報の検出、略語の学習（メモリ上）、Coding Mode の説明（LLM、無ければルールのヒント）、画面共有中の警告、端末内での識別の推定が加わる。別経路の `ActivityTracker` は前面ページを 2 秒ごとに観測し、閲覧記録・ブックマーク・作業セッションを作る。`ContextIntelCoordinator` はページ変更時に作品・ニュースのカードを判断する。
 
 ### 2.2 将来案
 
-字幕・Terminal などの専用領域検出、日付・金額の抽出、汎用 Web 検索 API、大規模な履歴向けの検索索引は未実装。現在の処理は上記の v0.10 経路と §3 の各コンポーネントを参照。
+字幕・Terminal などの専用領域検出、日付・金額の抽出、ページ要約・Archive への質問などのローカル LLM 機能（[LOCAL_AI.md](LOCAL_AI.md) §4）、大規模な履歴向けの検索索引は未実装。汎用 Web 検索 API は D-7 により実装しない。
+
+### 2.3 ローカル AI の 3 段構成（v0.11〜）
+
+| 段 | 中身 | 使えないときの扱い |
+| --- | --- | --- |
+| L0 ルール | `AmbientCore` の純粋関数（正規表現・表・チェックサム・換算） | 常に使える |
+| L1 オンデバイス ML | Vision / NaturalLanguage / Translation | macOS 15 以上で使える |
+| L2 オンデバイス LLM | Foundation Models（テキストのみ、`@Generable`） | 無い Mac では L0 / L1 の結果だけを出すか、何も出さない |
+
+識別の流れ（LA-1）:
+
+```
+大きな画像変化 → ImageClassifier（categories + labels）
+  → VisualLabelSelector（汎用ラベルを除き具体的なラベルを最大 5 つ）
+  → AppleIntelligenceReasoner.identify（ラベル＋周辺の文字、画像は渡さない）
+  → IdentificationPolicy.localConfidence（LLM の自己申告は信用せず、分類の確度で上限。
+     名前が画面の文字にあれば断定）→ accept（0.55 以上・カテゴリ一致）→ HUD
+```
 
 ---
 
@@ -55,9 +76,9 @@ ScreenCaptureKit (5–30fps, 除外アプリと自分の HUD は画像から除�
 | モジュール | 主な実装 | 残る課題・将来案 |
 | --- | --- | --- |
 | Capture | `ScreenCaptureManager`, `FrameBuffer`, `FrameConverter` | `WindowTracker`（ウィンドウ単位の対象指定） |
-| Vision | `ChangeDetector`, `AnalysisScheduler`, `OCRService`, `ImageClassifier`, `TextBlockGrouper`, `FaceDetector`, QR 検出 | 字幕・Terminal などの専用領域検出 |
-| Intelligence | `AIRouter`, `InterestScorer`, `AppleIntelligenceReasoner`, `ErrorDetector`, `TermExtractor`, `AnalysisPipeline` | より細かい領域・文脈の判定 |
-| AI / Cloud | `AppleIntelligenceBriefingProvider`, `GeminiProvider`, `NetworkGate`。`AIProvider` / `LocalAIProvider` は別の抽象化として存在 | 汎用 Web 検索 API |
+| Vision | `ChangeDetector`, `AnalysisScheduler`, `OCRService`, `ImageClassifier`（カテゴリとラベル）, `TextBlockGrouper`, `FaceDetector`, QR 検出 | 字幕・Terminal などの専用領域検出 |
+| Intelligence | `AIRouter`, `InterestScorer`, `AppleIntelligenceReasoner`, `ErrorDetector`, `ErrorHints`, `TermExtractor`, `AnalysisPipeline` | より細かい領域・文脈の判定 |
+| Local AI | `LocalKnowledgeReasoner`（`AppleIntelligenceReasoner` の拡張: `VisualIdentifying` / `MediaResearching`）、Core の `VisualLabelSelector` / `IdentificationPolicy` / `AcronymGlossary` / `UnitConverter`。`AIProvider` / `LocalAIProvider` は別の抽象化として存在 | ページ要約・Archive への質問など（LOCAL_AI.md §4） |
 | Context | `ActivityTracker`, `ContextIntelCoordinator`, `MediaContext`, `BrowserURLProvider` | スクロール速度などの活用 |
 | Memory | `IntelStore` / `IntelDatabase`（GRDB）、`VisualMemoryIndex`, `NLTextEmbedding` | 大規模データ向けの索引 |
 | Privacy | `PrivacyPolicy`, `PrivacyManager`, `SensitiveDataDetector`, `ScreenShareMonitor`, `RedactionOverlayController` | 共有中の黒塗りの実機検証 |
@@ -122,13 +143,13 @@ Foundation Models では `@Generable` の構造体で受け取り、JSON 文字�
 | `InterestAdjusting` | 個人化 | `PersonalizationStore` |
 | `VisualMemoryStore` | 記憶 | `IntelStore`（SQLite） |
 | `AIProvider` | 画像＋文脈の解析 | `LocalAIProvider`（ルールベース） |
-| `CloudIdentifying` / `MediaResearching` | 識別・作品・ニュースの情報取得 | `GeminiProvider`（オプトイン） |
+| `VisualIdentifying` / `MediaResearching` | 識別・公人・作品・ニュースの推定 | `AppleIntelligenceReasoner`（端末内、v0.11。旧 `GeminiProvider` は削除） |
 
 ---
 
 ## 5. データ設計
 
-### 5.1 現状（v0.10）
+### 5.1 現状（v0.11）
 
 | データ | 保存先 | 内容 |
 | --- | --- | --- |
@@ -136,6 +157,7 @@ Foundation Models では `@Generable` の構造体で受け取り、JSON 文字�
 | Personalization | `UserDefaults`（JSON） | `action:…|lang:…|app:…` ごとの重み（−0.3〜+0.3） |
 | Visual Memory・閲覧記録・セッション・エンティティ・Knowledge Cache | `Application Support/AmbientScreenIntelligence/intel.sqlite`（GRDB） | HUD に表示した Intel と、設定で有効な場合のページのタイトル・URL・閲覧時間。保持 1/7/30 日（ブックマークを除く）、バックアップ除外。v0.4 の `visual-memory.json` は初回起動時に取り込んで削除 |
 | フレーム | メモリのみ | 保存しない |
+| 略語の用語集（LA-6） | メモリのみ | 画面で見た「長い形 (略語)」の組を最大 300 件。終了で消える |
 
 ### 5.2 スキーマの概略（SQLite）
 
@@ -164,12 +186,12 @@ Foundation Models では `@Generable` の構造体で受け取り、JSON 文字�
 | ID | 原則 | 実装 |
 | --- | --- | --- |
 | PD-1 | フレーム画像はディスクに保存しない | メモリのみ。前フレームは 320px 輝度画像 |
-| PD-2 | Local First | OCR・翻訳・主要な判定はオンデバイス。Gemini による識別・作品・ニュースの補足はオプトイン |
+| PD-2 | Local Only（v0.11〜） | すべての処理がオンデバイス。ネットワーク Entitlement を持たない |
 | PD-3 | 除外アプリはキャプチャ画像から除去し、解析もしない | `SCContentFilter` の除外＋前面アプリの判定 |
 | PD-4 | パスワード系ウィンドウでは解析しない | タイトルのキーワード判定 |
 | PD-5 | ログに認識テキストを出さない | 件数・文字数・言語コードのみ |
 | PD-6 | 記録するのは派生データのみ | Visual Memory はテキストとメタデータのみ。バックアップ除外 |
-| PD-7 | クラウド送信はオプトイン。画像は切り抜き領域のみ、作品・ニュース・公人の補足では必要なテキストを送る | `NetworkGate`（オプトイン・キー・Battery・許可ホスト）、`ImageCropper`、秘密情報を含む領域は送らない。送信履歴（目的・ホスト・サイズ）を設定画面に表示 |
+| PD-7 | 端末外に送らない | v0.11 でクラウド送信を廃止（旧: Gemini へのオプトイン送信）。旧版の API キーは起動時に Keychain から削除 |
 | PD-8 | ユーザーがいつでも止められ、消せる | Pause、記録オフ、全削除 |
 
 ### 6.2 データの流れと保存先
@@ -177,12 +199,11 @@ Foundation Models では `@Generable` の構造体で受け取り、JSON 文字�
 | データ | 端末外に出るか | 保存 | 保持 |
 | --- | --- | --- | --- |
 | 画面フレーム | 出ない | しない | — |
-| OCR テキスト（解析中） | 公人の判定時には画面上の人名と周辺テキストを送る場合がある | HUD に表示したもの以外は保存しない | — |
+| OCR テキスト（解析中） | 出ない | HUD に表示したもの以外は保存しない（略語の組だけメモリ上に保持） | — |
 | HUD に表示した Intel | 出ない | SQLite | 1/7/30 日 |
-| 閲覧したページのタイトル・サニタイズ済み URL・閲覧時間 | ニュース見出しや作品タイトルを Gemini に送る場合がある | SQLite（記録を有効にした場合） | 1/7/30 日。ブックマークは残す |
+| 閲覧したページのタイトル・サニタイズ済み URL・閲覧時間 | 出ない | SQLite（記録を有効にした場合） | 1/7/30 日。ブックマークは残す |
 | Personalization の重み | 出ない | UserDefaults | 無期限（リセット可） |
-| クラウドに送る切り抜き（v0.8〜） | **出る**（オプトイン時のみ） | 端末には保存しない | プロバイダの規約に従う |
-| 作品タイトル・ニュース見出し・公人名と周辺テキスト | **出る**（Gemini 有効時のみ） | 知識キャッシュなどの派生データ | 用途に応じる |
+| 作品・公人・識別の推定結果 | 出ない | `knowledge`（`source = "on-device"`） | 7〜30 日 |
 
 ### 6.3 権限と Entitlement の変遷
 
@@ -192,14 +213,15 @@ Foundation Models では `@Generable` の構造体で受け取り、JSON 文字�
 | v0.7 | なし（ポインタ位置・クリップボードの変化回数は権限不要） | Interest Region、自動ブックマーク | — |
 | v0.7 | Apple Events（`com.apple.security.automation.apple-events` と対象ブラウザの temporary exception、`NSAppleEventsUsageDescription`） | ブラウザの URL（D-5 決定） | macOS がブラウザごとに初回だけ確認。設定でオフ可 |
 | v0.8 | `com.apple.security.network.client`（D-4 決定） | Gemini による識別（D-2 決定） | 設定でオプトインし API キー（キーチェーン保存）を入れるまで通信しない。通信先は Gemini API のみ |
+| v0.11 | `com.apple.security.network.client` を**削除**（D-7） | クラウド LLM を使わない方針 | アプリは通信しない。旧版の API キーは削除 |
 | v1.0 以降 | マイク、音声認識 | Audio Intelligence | 機能単位でオプトイン |
 
-ネットワーク Entitlement を付けた後も「オプトインするまで一切通信しない」ことを、通信層を 1 か所（`NetworkGate`）に集約して保証する。
+v0.11 からはネットワーク Entitlement 自体を持たないため、サンドボックスが通信を禁止する（`NetworkGate` は削除）。将来ローカルモデルの配布などで通信が必要になった場合は、D-7 を見直す判断事項として扱う。
 
 ### 6.4 秘密情報の扱い（SC-1〜3）
 
 - 検出は正規表現＋検証（クレジットカードは Luhn、AWS キーは接頭辞と長さ等）。検出結果の値そのものは保存・ログしない（種類と位置のみ）。
-- 秘密情報を含む領域は、クラウド送信・Visual Memory への記録から自動的に除外する。
+- 秘密情報を含む領域は、翻訳・LLM への入力・Visual Memory への記録から自動的に除外する。
 - 画面共有中の判定: 共有ツールが前面にあり、かつ共有中インジケータが出ている状態を `ScreenShareMonitor` で推定する（確実な API はないため、誤判定時は警告のみに留める）。
 
 ---

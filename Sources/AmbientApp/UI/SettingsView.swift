@@ -6,7 +6,6 @@ struct SettingsView: View {
     var onPurgeMemory: (() -> Void)?
     var briefingAvailable: Bool = AppleIntelligenceBriefingProvider().isAvailable
     @State private var newBundleIdentifier = ""
-    @State private var apiKeyDraft = ""
 
     init(settings: AppSettings, onResetPersonalization: (() -> Void)? = nil, onPurgeMemory: (() -> Void)? = nil) {
         _settings = ObservedObject(wrappedValue: settings)
@@ -132,37 +131,15 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Cloud identification (Gemini)") {
-                Toggle("Use Google Gemini to identify animals, plants, landmarks and public figures", isOn: $settings.cloudEnabled)
-                HStack {
-                    SecureField(settings.hasGeminiKey ? LocalizedStringKey("API key saved in Keychain") : LocalizedStringKey("Gemini API key"), text: $apiKeyDraft)
-                    Button(settings.hasGeminiKey ? LocalizedStringKey("Replace") : LocalizedStringKey("Save")) {
-                        settings.saveGeminiKey(apiKeyDraft)
-                        apiKeyDraft = ""
-                    }
-                    .disabled(apiKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
-                    if settings.hasGeminiKey {
-                        Button("Remove", role: .destructive) { settings.removeGeminiKey() }
-                    }
-                }
-                TextField("Model", text: $settings.geminiModel)
+            Section("On-device knowledge") {
+                Toggle("Identify animals, plants, landmarks, dishes and products (estimate)", isOn: $settings.localKnowledgeEnabled)
+                    .disabled(!briefingAvailable || !settings.imageClassificationEnabled)
                 Toggle("Identify public figures named on screen", isOn: $settings.publicFigureEnabled)
-                    .disabled(!settings.cloudEnabled)
-                Text("Nothing is sent until this is on and a key is saved, and never in Battery mode. Only a cropped image region (animals, plants, landmarks) or a name with nearby text (public figures) is sent — never the whole screen, never faces, never text containing secrets.")
+                    .disabled(!briefingAvailable || !settings.localKnowledgeEnabled)
+                Toggle("Convert miles, °F, pounds… where the pointer rests", isOn: $settings.unitConversionEnabled)
+                Text("Everything runs on this Mac; the app never sends anything over the network. The on-device model cannot see images — it guesses from image labels and nearby text, so names are marked “possibly” unless the screen shows them. Abbreviations defined on screen and common errors are explained even without Apple Intelligence.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                if !settings.sentRecords.isEmpty {
-                    ForEach(settings.sentRecords) { record in
-                        HStack {
-                            Text(record.date, style: .time).font(.caption.monospaced())
-                            Text(record.purpose).font(.caption)
-                            Spacer()
-                            Text(verbatim: "\(record.bytes / 1024) KB\(record.includesImage ? " · image" : "")")
-                                .font(.caption.monospaced())
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
             }
 
             Section("Movie, anime & news") {
@@ -174,7 +151,7 @@ struct SettingsView: View {
                 }
                 .disabled(!settings.mediaModeEnabled)
                 Toggle("News mode (background of the story)", isOn: $settings.newsModeEnabled)
-                Text("Work cards and news backgrounds use Gemini (window title or headline only). Without it, News mode shows related pages you read earlier. Both need “Remember pages you read”. “Up to where I am” uses the episode number in the title; without one it behaves like “No spoilers”.")
+                Text("Work cards and news backgrounds come from the on-device model’s own knowledge (well-known works only; it does not know recent news). News mode also lists related pages you read earlier. Both need “Remember pages you read”. “Up to where I am” uses the episode number in the title; without one it behaves like “No spoilers”.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -188,7 +165,7 @@ struct SettingsView: View {
             }
 
             Section("Privacy") {
-                Text("Screen content is processed in memory on this Mac. Screen images are never saved. Nothing is sent over the network unless you turn on Cloud identification.")
+                Text("Screen content is processed in memory on this Mac. Screen images are never saved. Nothing is ever sent over the network.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

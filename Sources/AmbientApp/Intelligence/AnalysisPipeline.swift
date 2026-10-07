@@ -17,8 +17,10 @@ struct PipelineConfiguration: Sendable, Equatable {
     var warnSensitiveWhileSharing: Bool = true
     /// Experimental: cover secrets with opaque boxes while the screen is shared.
     var redactWhileSharing: Bool = false
-    /// Gemini identification (opt-in; also requires an API key and not Battery mode).
-    var cloudEnabled: Bool = false
+    /// On-device identification and knowledge (estimates, LOCAL_AI.md LA-1/LA-2).
+    var localKnowledgeEnabled: Bool = true
+    /// Convert imperial quantities under a resting pointer (LOCAL_AI.md LA-15).
+    var unitConversionEnabled: Bool = true
     /// Look up public figures whose names appear on screen next to a face.
     var publicFigureEnabled: Bool = true
     /// Draw changed regions, OCR areas, router scores and timings on screen.
@@ -72,9 +74,14 @@ actor AnalysisPipeline {
     private let page: PageContext
     private let media: MediaContext
     private var castCooldown = CooldownCache(duration: 10 * 60)
-    private let cloud: (any CloudIdentifying)?
+    private let identifier: (any VisualIdentifying)?
     private let faceDetector = FaceDetector()
-    private var cloudLimiter = RateLimiter(minimumInterval: 30)
+    /// On-device identification is slower than the other LLM uses; at most every 20 s.
+    private var identifyLimiter = RateLimiter(minimumInterval: 20)
+    /// Abbreviations defined on screen (memory only, LOCAL_AI.md LA-6).
+    private var glossary = AcronymGlossary()
+    /// Where the pointer last rested outside Coding Mode (for unit conversion).
+    private var lastDwell: (region: CGRect, timestamp: TimeInterval)?
     private var personCooldown = CooldownCache(duration: 24 * 60 * 60)
     private let displayID: CGDirectDisplayID
     private let sensitiveDetector = SensitiveDataDetector()
@@ -108,7 +115,7 @@ actor AnalysisPipeline {
         screenShare: ScreenShareMonitor,
         page: PageContext,
         media: MediaContext,
-        cloud: (any CloudIdentifying)?,
+        identifier: (any VisualIdentifying)?,
         displayID: CGDirectDisplayID,
         present: @escaping Presenter
     ) {
@@ -135,7 +142,7 @@ actor AnalysisPipeline {
         self.screenShare = screenShare
         self.page = page
         self.media = media
-        self.cloud = configuration.cloudEnabled ? cloud : nil
+        self.identifier = configuration.localKnowledgeEnabled ? identifier : nil
         self.displayID = displayID
     }
 
@@ -174,6 +181,7 @@ actor AnalysisPipeline {
                 pendingDwellRegion = region
             } else {
                 scheduler.prioritize(ChangedRegion(rect: region, confidence: 1), at: frame.timestamp)
+                lastDwell = (region, frame.timestamp)
             }
         }
 
@@ -250,8 +258,14 @@ actor AnalysisPipeline {
             await handleSensitive(findings, timestamp: frame.timestamp)
         }
 
+        // Learn abbreviations the screen defines, to expand them elsewhere later.
+        for block in safeBlocks {
+            glossary.learn(from: block.text)
+        }
+
         let classifyStart = clock.now
-        let categories = await classifyIfUseful(regions: padded, textBlocks: blocks, frame: frame)
+        let classification = await classifyIfUseful(regions: padded, textBlocks: blocks, frame: frame)
+        let categories = classification.categories
         if !categories.isEmpty {
             diagnostics.timings["classify"] = Self.milliseconds(clock.now - classifyStart)
         }
@@ -285,19 +299,31 @@ actor AnalysisPipeline {
                 break
             }
         }
+        // Without the LLM, an abbreviation defined earlier on screen can still be expanded.
+        if action.action == .ignore, activeReasoner == nil,
+           let candidate = decision.candidates.first(where: { candidate in
+               candidate.action == .explainTerm && candidate.interestScore.level != .ignore
+                   && candidate.payload.flatMap { glossaryDefinition(for: $0, context: candidate.context) } != nil
+           }) {
+            action = candidate
+        }
 
         var outcome: IntelOutcome?
-        if action.action == .ignore, let code = codes.first {
+        if action.action == .ignore, let dwell = lastDwell, frame.timestamp - dwell.timestamp <= 4 {
+            outcome = await showConversions(in: safeBlocks, dwellRegion: dwell.region, timestamp: frame.timestamp)
+            if outcome != nil { lastDwell = nil }
+        }
+        if action.action == .ignore, outcome == nil, let code = codes.first {
             outcome = await showQRCode(code.payload, rect: code.rect, app: app, timestamp: frame.timestamp)
         }
         if action.action == .ignore, outcome == nil {
             outcome = await showCastIfNamed(safeBlocks, app: app, windowTitle: windowTitle, timestamp: frame.timestamp)
         }
-        if action.action == .ignore, outcome == nil, let cloud, cloud.isAvailable {
-            let cloudStart = clock.now
-            outcome = await identifyWithCloud(cloud, categories: categories, regions: padded, blocks: safeBlocks,
-                                              findings: findings, frame: frame, app: app, windowTitle: windowTitle)
-            if outcome != nil { diagnostics.timings["cloud"] = Self.milliseconds(clock.now - cloudStart) }
+        if action.action == .ignore, outcome == nil, let identifier, identifier.isAvailable {
+            let identifyStart = clock.now
+            outcome = await identifyLocally(identifier, classification: classification, regions: padded, blocks: safeBlocks,
+                                            frame: frame, app: app, windowTitle: windowTitle)
+            if outcome != nil { diagnostics.timings["identify"] = Self.milliseconds(clock.now - identifyStart) }
         }
         switch action.action {
         case .ignore:
@@ -353,22 +379,22 @@ actor AnalysisPipeline {
         return Double(components.seconds) * 1_000 + Double(components.attoseconds) / 1e15
     }
 
-    private func classifyIfUseful(regions: [ChangedRegion], textBlocks: [RecognizedTextRegion], frame: AnalyzableFrame) async -> [VisualCategory] {
+    private func classifyIfUseful(regions: [ChangedRegion], textBlocks: [RecognizedTextRegion], frame: AnalyzableFrame) async -> ImageClassification {
         guard configuration.imageClassificationEnabled,
               frame.timestamp - lastClassification >= configuration.performanceMode.classificationInterval,
               let largest = regions.max(by: { $0.area < $1.area }),
               largest.area >= 0.05
-        else { return [] }
+        else { return ImageClassification() }
         // Text-heavy changes are documents, not pictures.
         let textArea = textBlocks.reduce(CGFloat(0)) { $0 + $1.boundingBox.width * $1.boundingBox.height }
-        guard textArea < largest.area * 0.3 else { return [] }
+        guard textArea < largest.area * 0.3 else { return ImageClassification() }
 
         lastClassification = frame.timestamp
-        let categories = await classifier.classify(frame.pixelBuffer, region: largest.rect)
-        if !categories.isEmpty {
-            Log.vision.debug("Visual categories: \(categories.map(\.rawValue).joined(separator: ","), privacy: .public)")
+        let classification = await classifier.classify(frame.pixelBuffer, region: largest.rect)
+        if !classification.categories.isEmpty {
+            Log.vision.debug("Visual categories: \(classification.categories.map(\.rawValue).joined(separator: ","), privacy: .public)")
         }
-        return categories
+        return classification
     }
 
     private func translate(_ action: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval) async -> IntelOutcome {
@@ -425,34 +451,41 @@ actor AnalysisPipeline {
     // MARK: Coding Mode
 
     /// Explains an error seen in a terminal / IDE / GitHub.
+    /// The on-device LLM first; canned rules (LOCAL_AI.md LA-20) when it is
+    /// unavailable, busy or gives nothing usable.
     private func explainError(_ candidate: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval) async -> IntelOutcome {
-        guard let reasoner = activeReasoner, let line = candidate.payload else { return .discarded }
+        guard let line = candidate.payload else { return .discarded }
         let key = CooldownCache.key(action: .explainError, payload: line)
         guard !cooldown.isCoolingDown(key, now: timestamp) else { return .cooldown }
-        guard llmLimiter.allow(now: timestamp) else { return .discarded }
-        do {
-            let raw = try await reasoner.explainError(line, context: candidate.context ?? line, targetLanguage: configuration.targetLanguage)
-            guard let explanation = DeveloperOutputSanitizer.sanitize(raw, errorLine: line) else { return .discarded }
-            cooldown.record(key, now: timestamp)
-            let kind = ErrorDetector().detect(in: line)?.kind ?? "Error"
-            let detail = explanation.fix.map { "\(explanation.cause)\n▸ \($0)" } ?? explanation.cause
-            let message = HUDMessage(
-                kind: .errorAnalysis,
-                title: kind,
-                original: line,
-                detail: detail,
-                anchor: candidate.region,
-                features: PersonalizationFeatures(action: .explainError, language: nil, bundleIdentifier: app.bundleIdentifier),
-                targetLanguage: configuration.targetLanguage
-            )
-            await present(.show(message, briefingPending: false))
-            await rememberIfEnabled(message, app: app, windowTitle: windowTitle, entities: [])
-            Log.pipeline.info("Error explained")
-            return .shown
-        } catch {
-            Log.pipeline.error("Error explanation failed: \(String(describing: error), privacy: .public)")
-            return .failed
+        var explanation: ErrorExplanation?
+        if let reasoner = activeReasoner, llmLimiter.allow(now: timestamp) {
+            do {
+                let raw = try await reasoner.explainError(line, context: candidate.context ?? line, targetLanguage: configuration.targetLanguage)
+                explanation = DeveloperOutputSanitizer.sanitize(raw, errorLine: line)
+            } catch {
+                Log.pipeline.error("Error explanation failed: \(String(describing: error), privacy: .public)")
+            }
         }
+        if explanation == nil {
+            explanation = ErrorHints.hint(for: line, targetLanguage: configuration.targetLanguage)
+        }
+        guard let explanation else { return .discarded }
+        cooldown.record(key, now: timestamp)
+        let kind = ErrorDetector().detect(in: line)?.kind ?? "Error"
+        let detail = explanation.fix.map { "\(explanation.cause)\n▸ \($0)" } ?? explanation.cause
+        let message = HUDMessage(
+            kind: .errorAnalysis,
+            title: kind,
+            original: line,
+            detail: detail,
+            anchor: candidate.region,
+            features: PersonalizationFeatures(action: .explainError, language: nil, bundleIdentifier: app.bundleIdentifier),
+            targetLanguage: configuration.targetLanguage
+        )
+        await present(.show(message, briefingPending: false))
+        await rememberIfEnabled(message, app: app, windowTitle: windowTitle, entities: [])
+        Log.pipeline.info("Error explained")
+        return .shown
     }
 
     /// Summarizes the code around a pointer dwell.
@@ -499,31 +532,32 @@ actor AnalysisPipeline {
         return CGPoint(x: (location.x - bounds.minX) / bounds.width, y: (location.y - bounds.minY) / bounds.height)
     }
 
-    // MARK: Cloud identification (Gemini, opt-in)
+    // MARK: On-device identification (LOCAL_AI.md LA-1 / LA-2)
 
-    /// Animals / plants / landmarks from a cropped image, or a public figure
-    /// named on screen next to a visible face. Returns nil when nothing was tried.
-    private func identifyWithCloud(
-        _ cloud: any CloudIdentifying,
-        categories: [VisualCategory],
+    /// Animals / plants / landmarks / dishes / products from the classifier's
+    /// labels and nearby text, or a public figure named on screen next to a
+    /// visible face. Estimates only. Returns nil when nothing was tried.
+    private func identifyLocally(
+        _ identifier: any VisualIdentifying,
+        classification: ImageClassification,
         regions: [ChangedRegion],
         blocks: [RecognizedTextRegion],
-        findings: [SensitiveFinding],
         frame: AnalyzableFrame,
         app: ForegroundContextProvider.Snapshot,
         windowTitle: String?
     ) async -> IntelOutcome? {
         let context = blocks.map(\.text).joined(separator: " ")
 
-        if let hint = categories.first(where: { [.animal, .plant, .landmark, .food, .product].contains($0) }),
+        if let hint = classification.categories.first(where: { [.animal, .plant, .landmark, .food, .product].contains($0) }),
            let largest = regions.max(by: { $0.area < $1.area }),
            Double(largest.area) >= IdentificationPolicy.minimumRegionArea {
-            // Never send a region that contains sensitive text.
-            guard !findings.contains(where: { $0.region?.intersects(largest.rect) ?? true }) else { return .discarded }
-            guard cloudLimiter.allow(now: frame.timestamp) else { return .cooldown }
-            guard let jpeg = ImageCropper.jpeg(from: frame.pixelBuffer, region: largest.rect) else { return .discarded }
+            let labels = VisualLabelSelector.select(classification.labels, for: hint)
+            guard !labels.isEmpty else { return .discarded }
+            guard identifyLimiter.allow(now: frame.timestamp) else { return .cooldown }
             do {
-                let answer = try await cloud.identify(imageJPEG: jpeg, hint: hint, context: context, targetLanguage: configuration.targetLanguage)
+                var answer = try await identifier.identify(labels: labels, hint: hint, context: context, targetLanguage: configuration.targetLanguage)
+                answer.confidence = IdentificationPolicy.localConfidence(
+                    answer, labelConfidence: VisualLabelSelector.topConfidence(labels), nearbyText: context)
                 guard IdentificationPolicy.accept(answer, hint: hint) else { return .discarded }
                 let key = CooldownCache.key(action: .ignore, payload: "id " + answer.name)
                 guard cooldown.checkAndRecord(key, now: frame.timestamp) else { return .cooldown }
@@ -549,10 +583,10 @@ actor AnalysisPipeline {
                 message = await withReappearance(message, entities: [entity])
                 await present(.show(message, briefingPending: false))
                 await rememberIfEnabled(message, app: app, windowTitle: windowTitle, entities: [entity])
-                Log.pipeline.info("Identified \(answer.category, privacy: .public) via cloud")
+                Log.pipeline.info("Identified \(answer.category, privacy: .public) on-device (\(labels.count) label(s))")
                 return .shown
             } catch {
-                Log.pipeline.error("Cloud identification failed: \(String(describing: error), privacy: .public)")
+                Log.pipeline.error("On-device identification failed: \(String(describing: error), privacy: .public)")
                 return .failed
             }
         }
@@ -561,7 +595,7 @@ actor AnalysisPipeline {
         let text = ([windowTitle].compactMap { $0 } + blocks.map(\.text)).joined(separator: "\n")
         let people = NLEntityExtractor.entities(in: text).filter { $0.type == .person }
         guard let person = people.first(where: { !personCooldown.isCoolingDown($0.canonicalName, now: frame.timestamp) }) else { return nil }
-        var faceVisible = categories.contains(.person)
+        var faceVisible = classification.categories.contains(.person)
         if !faceVisible {
             faceVisible = await faceDetector.containsFace(in: frame.pixelBuffer, regions: regions)
         }
@@ -574,15 +608,15 @@ actor AnalysisPipeline {
             profile = PublicFigureAnswer(isPublicFigure: true, name: cached.name, role: cached.summary,
                                          knownFor: cached.detail?.components(separatedBy: "\n") ?? [], confidence: 1)
         } else {
-            guard cloudLimiter.allow(now: frame.timestamp) else { return .cooldown }
+            guard identifyLimiter.allow(now: frame.timestamp) else { return .cooldown }
             do {
-                let answer = try await cloud.publicFigure(named: person.name, context: String(text.prefix(300)), targetLanguage: configuration.targetLanguage)
+                let answer = try await identifier.publicFigure(named: person.name, context: String(text.prefix(300)), targetLanguage: configuration.targetLanguage)
                 let accepted = IdentificationPolicy.accept(answer, nameOnScreen: person.name)
                 await store.saveKnowledge(
                     entity: person,
                     summary: accepted ? answer.role : TermExplanationSanitizer.declinedMarker,
                     detail: accepted ? answer.knownFor.prefix(3).joined(separator: "\n") : nil,
-                    source: "gemini"
+                    source: "on-device"
                 )
                 profile = accepted ? answer : nil
             } catch {
@@ -597,7 +631,7 @@ actor AnalysisPipeline {
             kind: .publicFigure,
             title: profile.name,
             original: profile.role,
-            detail: works.isEmpty ? profile.role : (japanese ? "代表作\n" : "Known for\n") + works,
+            detail: works.isEmpty ? profile.role : (japanese ? "代表作（端末内の推定）\n" : "Known for (on-device estimate)\n") + works,
             anchor: nil,
             features: PersonalizationFeatures(action: .identifyPerson, language: nil, bundleIdentifier: app.bundleIdentifier),
             targetLanguage: configuration.targetLanguage
@@ -607,6 +641,31 @@ actor AnalysisPipeline {
         await rememberIfEnabled(message, app: app, windowTitle: windowTitle, entities: [person])
         Log.pipeline.info("Public figure shown")
         return .shown
+    }
+
+    // MARK: Unit conversion (LOCAL_AI.md LA-15)
+
+    /// Imperial quantities in the text under a resting pointer, converted to metric.
+    private func showConversions(in blocks: [RecognizedTextRegion], dwellRegion: CGRect, timestamp: TimeInterval) async -> IntelOutcome? {
+        guard configuration.unitConversionEnabled else { return nil }
+        for block in blocks where block.boundingBox.intersects(dwellRegion) {
+            let conversions = UnitConverter.conversions(in: block.text, targetLanguage: configuration.targetLanguage)
+            guard let first = conversions.first else { continue }
+            let key = CooldownCache.key(action: .ignore, payload: "convert " + conversions.map(\.original).joined(separator: "|"))
+            guard cooldown.checkAndRecord(key, now: timestamp) else { return .cooldown }
+            let message = HUDMessage(
+                kind: .conversion,
+                title: first.converted,
+                original: first.original,
+                detail: conversions.map { "\($0.original) → \($0.converted)" }.joined(separator: "\n"),
+                anchor: block.boundingBox,
+                targetLanguage: configuration.targetLanguage
+            )
+            await present(.show(message, briefingPending: false))
+            Log.pipeline.info("Units converted (\(conversions.count))")
+            return .shown
+        }
+        return nil
     }
 
     // MARK: Movie / Anime mode
@@ -691,23 +750,45 @@ actor AnalysisPipeline {
         return reasoner
     }
 
+    /// A definition of the abbreviation seen earlier on screen, unless the
+    /// text around it already defines it (the page explains itself).
+    private func glossaryDefinition(for term: String, context: String?) -> AcronymDefinition? {
+        guard let definition = glossary.lookup(term) else { return nil }
+        if let context, context.localizedCaseInsensitiveContains(definition.expansion) { return nil }
+        return definition
+    }
+
     /// Explains a technical term: Knowledge Cache first, then the on-device LLM,
     /// which may also decide the term is not worth explaining (cached too).
+    /// Without the LLM, an abbreviation defined earlier on screen is expanded
+    /// from the in-memory glossary (LOCAL_AI.md LA-6).
     private func explainTerm(_ candidate: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval) async -> IntelOutcome {
-        guard let reasoner = activeReasoner, let term = candidate.payload else { return .discarded }
+        guard let term = candidate.payload else { return .discarded }
+        let definition = glossaryDefinition(for: term, context: candidate.context)
+        let reasoner = activeReasoner
+        guard reasoner != nil || definition != nil else { return .discarded }
         let canonical = EntityName.canonical(term)
         if await store.shouldSkipTerm(canonical) { return .discarded }
         let key = CooldownCache.key(action: .explainTerm, payload: canonical)
         guard !cooldown.isCoolingDown(key, now: timestamp) else { return .cooldown }
 
-        let explanation: TermExplanation
-        if let cached = await store.knowledge(forTerm: canonical) {
+        var explanation: TermExplanation
+        if let definition, reasoner == nil {
+            let japanese = LanguageCode.base(configuration.targetLanguage) == "ja"
+            explanation = TermExplanation(
+                shouldExplain: true,
+                expansion: definition.expansion,
+                summary: japanese ? "以前の画面に書かれていた略語の定義です" : "Defined earlier on your screen"
+            )
+        } else if let cached = await store.knowledge(forTerm: canonical) {
             guard cached.summary != TermExplanationSanitizer.declinedMarker else { return .discarded }
             explanation = TermExplanation(shouldExplain: true, expansion: cached.detail, summary: cached.summary)
         } else {
-            guard llmLimiter.allow(now: timestamp) else { return .discarded }
+            guard let reasoner, llmLimiter.allow(now: timestamp) else { return .discarded }
             do {
-                let raw = try await reasoner.explain(term: term, context: candidate.context ?? term, targetLanguage: configuration.targetLanguage)
+                var context = candidate.context ?? term
+                if let definition { context = "\(definition.acronym) = \(definition.expansion). " + context }
+                let raw = try await reasoner.explain(term: term, context: context, targetLanguage: configuration.targetLanguage)
                 let cleaned = TermExplanationSanitizer.sanitize(raw, term: term)
                 await store.saveKnowledge(
                     term: term,
@@ -723,6 +804,9 @@ actor AnalysisPipeline {
             }
         }
 
+        if explanation.expansion == nil, let definition {
+            explanation = TermExplanation(shouldExplain: true, expansion: definition.expansion, summary: explanation.summary)
+        }
         cooldown.record(key, now: timestamp)
         let termEntity = ExtractedEntity(type: .term, name: term)
         var message = HUDMessage(
@@ -753,11 +837,11 @@ actor AnalysisPipeline {
 
     private func rememberIfEnabled(_ message: HUDMessage, app: ForegroundContextProvider.Snapshot, windowTitle: String?, entities: [ExtractedEntity]) async {
         guard configuration.memoryEnabled else { return }
-        guard ![.securityWarning, .qrCode, .resume, .mediaInfo, .cast, .newsContext].contains(message.kind) else { return }
+        guard ![.securityWarning, .qrCode, .resume, .mediaInfo, .cast, .newsContext, .conversion].contains(message.kind) else { return }
         let isExplanation = message.kind == .explanation
         let kind: VisualMemoryEntry.Kind
         switch message.kind {
-        case .translation, .securityWarning, .qrCode, .resume, .mediaInfo, .cast, .newsContext: kind = .translation
+        case .translation, .securityWarning, .qrCode, .resume, .mediaInfo, .cast, .newsContext, .conversion: kind = .translation
         case .explanation: kind = .explanation
         case .errorAnalysis: kind = .errorAnalysis
         case .codeSummary: kind = .codeSummary

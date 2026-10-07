@@ -2,12 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Sandboxed. Outgoing network only for opt-in Gemini identification (see below). No file or device entitlements. -->
+	<!-- Sandboxed. No network (local only, ROADMAP D-7), no file or device entitlements. -->
 	<key>com.apple.security.app-sandbox</key>
-	<true/>
-	<!-- Gemini identification (ROADMAP D-4). All requests go through NetworkGate:
-	     nothing is sent until the user opts in and saves an API key. -->
-	<key>com.apple.security.network.client</key>
 	<true/>
 	<!-- Read the front tab's URL from browsers (ROADMAP D-5). macOS asks the user per browser. -->
 	<key>com.apple.security.automation.apple-events</key>

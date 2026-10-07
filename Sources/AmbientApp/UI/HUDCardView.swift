@@ -74,7 +74,7 @@ struct HUDCardView: View {
             switch message.kind {
             case .securityWarning:
                 EmptyView()
-            case .qrCode:
+            case .qrCode, .conversion:
                 actionButton("COPY", .copy)
             case .resume:
                 actionButton("SESSIONS", .openArchive)
@@ -103,7 +103,7 @@ struct HUDCardView: View {
                     actionButton("MUTE \(LanguageCode.base(language).uppercased())", .skipLanguage)
                 }
             case .errorAnalysis, .codeSummary, .securityWarning, .qrCode, .resume, .identification, .publicFigure,
-                 .mediaInfo, .cast, .newsContext:
+                 .mediaInfo, .cast, .newsContext, .conversion:
                 EmptyView()
             }
             Spacer(minLength: 0)
@@ -148,6 +148,7 @@ struct HUDCardView: View {
         case .mediaInfo: return "DOSSIER // FEATURE"
         case .cast: return "CAST // ON SCREEN"
         case .newsContext: return "BRIEFING // BACKGROUND"
+        case .conversion: return "INTEL // CONVERSION"
         }
     }
 
@@ -165,6 +166,7 @@ struct HUDCardView: View {
         case .mediaInfo: return "FEATURE"
         case .cast: return "CAST"
         case .newsContext: return "NEWS"
+        case .conversion: return "UNITS"
         }
     }
 
@@ -173,7 +175,7 @@ struct HUDCardView: View {
         switch message.kind {
         case .errorAnalysis, .securityWarning: return SpyTheme.alert
         case .resume, .publicFigure, .mediaInfo, .cast, .newsContext: return SpyTheme.intel
-        case .translation, .explanation, .codeSummary, .qrCode, .identification: return SpyTheme.accent
+        case .translation, .explanation, .codeSummary, .qrCode, .identification, .conversion: return SpyTheme.accent
         }
     }
 

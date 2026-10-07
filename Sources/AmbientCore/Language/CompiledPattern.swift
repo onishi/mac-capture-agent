@@ -23,4 +23,15 @@ public struct CompiledPattern: @unchecked Sendable {
     public func matches(_ text: String) -> Bool {
         firstRange(in: text) != nil
     }
+
+    /// Every match's capture groups (index 0 is the whole match; nil when a group did not take part).
+    public func captures(in text: String) -> [[String?]] {
+        guard let regex else { return [] }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.matches(in: text, range: range).map { match in
+            (0..<match.numberOfRanges).map { index in
+                Range(match.range(at: index), in: text).map { String(text[$0]) }
+            }
+        }
+    }
 }
