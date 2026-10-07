@@ -7,6 +7,7 @@ Ambient Screen Intelligence: macOS の画面を常時観察し、価値がある
 - 要件: `docs/SPEC.md`（要件 ID と実装状態）
 - 設計: `docs/ARCHITECTURE.md`（構成・データ・プライバシー）
 - 計画: `docs/ROADMAP.md`（マイルストーン・完了条件・判断事項・実機チェックリスト）
+- できること・アイデアのまとめ: `docs/CAPABILITIES.md`
 - ローカル AI: `docs/LOCAL_AI.md`（3 段構成・推定の表示ルール・アイデア一覧 LA-*）
 - 着手用プロンプト: `docs/IMPLEMENTATION_PROMPT.md`
 

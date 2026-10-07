@@ -12,6 +12,7 @@
 | --- | --- |
 | [docs/SPEC.md](docs/SPEC.md) | 製品仕様（要件 ID と実装状況） |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 技術構成・データ設計・プライバシー設計 |
+| [docs/CAPABILITIES.md](docs/CAPABILITIES.md) | 今できること・これからのアイデア（利用者向けのまとめ） |
 | [docs/LOCAL_AI.md](docs/LOCAL_AI.md) | ローカル AI の方針とアイデア一覧（LA-*） |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 開発計画（マイルストーン・完了条件・判断事項・実機チェックリスト） |
 | [docs/RELEASE.md](docs/RELEASE.md) | 署名・公証・DMG の作り方 |
