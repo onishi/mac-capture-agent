@@ -28,6 +28,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             store: controller.memoryStore,
             retentionDays: { settings.memoryRetentionDays },
             memoryEnabled: { settings.memoryEnabled },
+            answerer: controller.archiveAnswerer,
+            askingEnabled: { settings.isEnabled(.archiveQuestion) },
+            aiLogEnabled: { settings.memoryEnabled && settings.aiLogEnabled },
+            targetLanguage: { settings.targetLanguage },
             onOpen: { [weak controller] entry in controller?.recordSearch(for: entry) }
         ))
         self.archiveWindow = archiveWindow

@@ -42,6 +42,12 @@ struct HUDCardView: View {
                         .tracking(0.8)
                         .foregroundStyle(SpyTheme.textSecondary)
                 }
+                if let source = message.source {
+                    Text(source.label)
+                        .font(SpyTheme.mono(8.5, weight: .semibold))
+                        .tracking(0.8)
+                        .foregroundStyle(source == .onDeviceLLM ? SpyTheme.intel.opacity(0.85) : SpyTheme.textSecondary)
+                }
             }
             .padding(.horizontal, 14)
             .padding(.top, 10)

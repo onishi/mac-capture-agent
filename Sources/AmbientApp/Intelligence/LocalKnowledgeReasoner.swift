@@ -127,6 +127,25 @@ extension AppleIntelligenceReasoner: RegionDescribing {
     }
 }
 
+// MARK: - Ask the archive (LA-30)
+
+extension AppleIntelligenceReasoner: ArchiveAnswering {
+    func answer(question: String, evidence: [ArchiveEvidence], targetLanguage: String) async throws -> String {
+        #if canImport(FoundationModels)
+        if #available(macOS 26.0, *) {
+            guard SystemLanguageModel.default.isAvailable else { throw BriefingError.unavailable }
+            let session = LanguageModelSession(instructions: ArchiveQuestion.instructions(targetLanguage: targetLanguage))
+            let response = try await session.respond(
+                to: ArchiveQuestion.prompt(question: question, evidence: evidence),
+                options: GenerationOptions(temperature: 0, maximumResponseTokens: 220)
+            )
+            return response.content
+        }
+        #endif
+        throw BriefingError.unavailable
+    }
+}
+
 #if canImport(FoundationModels)
 @available(macOS 26.0, *)
 @Generable

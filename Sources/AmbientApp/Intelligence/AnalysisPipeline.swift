@@ -480,6 +480,7 @@ actor AnalysisPipeline {
         let key = CooldownCache.key(action: .explainError, payload: line)
         guard explicit || !cooldown.isCoolingDown(key, now: timestamp) else { return .cooldown }
         var explanation: ErrorExplanation?
+        var source = IntelSource.onDeviceLLM
         if let reasoner = activeReasoner, explicit || llmLimiter.allow(now: timestamp) {
             let start = clock.now
             do {
@@ -495,6 +496,7 @@ actor AnalysisPipeline {
         }
         if explanation == nil, configuration.features.isEnabled(.errorHints) {
             explanation = ErrorHints.hint(for: line, targetLanguage: configuration.targetLanguage)
+            source = .rule
         }
         guard let explanation else { return .discarded }
         cooldown.record(key, now: timestamp)
@@ -507,7 +509,8 @@ actor AnalysisPipeline {
             detail: detail,
             anchor: candidate.region,
             features: PersonalizationFeatures(action: .explainError, language: nil, bundleIdentifier: app.bundleIdentifier),
-            targetLanguage: configuration.targetLanguage
+            targetLanguage: configuration.targetLanguage,
+            source: source
         )
         await present(.show(message, briefingPending: false))
         await rememberIfEnabled(message, app: app, windowTitle: windowTitle, entities: [])
@@ -745,7 +748,7 @@ actor AnalysisPipeline {
             qrPayloads: codes.map { $0.payload },
             candidates: router.candidates(for: context),
             text: text,
-            conversions: UnitConverter.conversions(in: text, targetLanguage: configuration.targetLanguage),
+            conversions: QuickConversions.all(in: text, targetLanguage: configuration.targetLanguage),
             categories: classification.categories,
             canUseLanguageModel: activeReasoner != nil,
             features: configuration.features
@@ -837,11 +840,12 @@ actor AnalysisPipeline {
 
     // MARK: Unit conversion (LOCAL_AI.md LA-15)
 
-    /// Imperial quantities in the text under a resting pointer, converted to metric.
+    /// Imperial quantities, times in other zones, timestamps and dates in the
+    /// text under a resting pointer, converted for the user (LA-15〜LA-18).
     private func showConversions(in blocks: [RecognizedTextRegion], dwellRegion: CGRect, timestamp: TimeInterval) async -> IntelOutcome? {
         guard configuration.features.isEnabled(.unitConversion) else { return nil }
         for block in blocks where block.boundingBox.intersects(dwellRegion) {
-            let conversions = UnitConverter.conversions(in: block.text, targetLanguage: configuration.targetLanguage)
+            let conversions = QuickConversions.all(in: block.text, targetLanguage: configuration.targetLanguage)
             guard let first = conversions.first else { continue }
             let key = CooldownCache.key(action: .ignore, payload: "convert " + conversions.map(\.original).joined(separator: "|"))
             guard cooldown.checkAndRecord(key, now: timestamp) else { return .cooldown }
@@ -997,7 +1001,9 @@ actor AnalysisPipeline {
         guard explicit || !cooldown.isCoolingDown(key, now: timestamp) else { return .cooldown }
 
         var explanation: TermExplanation
+        var source = IntelSource.onDeviceLLM
         if let definition, reasoner == nil {
+            source = .rule
             let japanese = LanguageCode.base(configuration.targetLanguage) == "ja"
             explanation = TermExplanation(
                 shouldExplain: true,
@@ -1046,7 +1052,8 @@ actor AnalysisPipeline {
             anchor: candidate.region,
             features: PersonalizationFeatures(action: .explainTerm, language: nil, bundleIdentifier: app.bundleIdentifier),
             sourceLanguage: nil,
-            targetLanguage: configuration.targetLanguage
+            targetLanguage: configuration.targetLanguage,
+            source: source
         )
         message = await withReappearance(message, entities: [termEntity])
         await present(.show(message, briefingPending: false))

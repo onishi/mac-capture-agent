@@ -8,6 +8,15 @@ enum ArchiveTab: String, CaseIterable {
     case aiLog = "AI LOG"
 }
 
+/// The answer to a question asked in the archive (LA-30).
+struct ArchiveAnswer: Equatable {
+    var question: String
+    var text: String?
+    var isLoading: Bool
+    /// The records the answer cites (1-based numbers into `evidence`).
+    var cited: [VisualMemoryEntry] = []
+}
+
 @MainActor
 final class ArchiveViewModel: ObservableObject {
     @Published var tab: ArchiveTab = .records {
@@ -29,10 +38,20 @@ final class ArchiveViewModel: ObservableObject {
     @Published private(set) var copiedID: UUID?
     @Published private(set) var isSearching = false
 
+    @Published private(set) var answer: ArchiveAnswer?
+
     let retentionDays: () -> Int
     let memoryEnabled: () -> Bool
     private let store: IntelStore
     private let onOpen: (VisualMemoryEntry) -> Void
+    private let answerer: (any ArchiveAnswering)?
+    private let askingEnabled: () -> Bool
+    private let aiLogEnabled: () -> Bool
+    private let targetLanguage: () -> String
+    private var askTask: Task<Void, Never>?
+
+    /// Questions ("…?") can be answered from the archive by the on-device model.
+    var canAsk: Bool { askingEnabled() && answerer?.isAvailable == true }
     private var queryObservation: AnyCancellable?
     private var searchTask: Task<Void, Never>?
 
@@ -40,17 +59,28 @@ final class ArchiveViewModel: ObservableObject {
         store: IntelStore,
         retentionDays: @escaping () -> Int,
         memoryEnabled: @escaping () -> Bool,
+        answerer: (any ArchiveAnswering)? = nil,
+        askingEnabled: @escaping () -> Bool = { false },
+        aiLogEnabled: @escaping () -> Bool = { false },
+        targetLanguage: @escaping () -> String = { "ja" },
         onOpen: @escaping (VisualMemoryEntry) -> Void
     ) {
         self.store = store
         self.retentionDays = retentionDays
         self.memoryEnabled = memoryEnabled
+        self.answerer = answerer
+        self.askingEnabled = askingEnabled
+        self.aiLogEnabled = aiLogEnabled
+        self.targetLanguage = targetLanguage
         self.onOpen = onOpen
         queryObservation = $query
             .removeDuplicates()
             .debounce(for: .milliseconds(220), scheduler: RunLoop.main)
             .sink { [weak self] _ in
                 guard let self else { return }
+                if let answer = self.answer, ArchiveQuestion.question(from: self.query) != answer.question {
+                    self.dismissAnswer()
+                }
                 if self.tab == .aiLog { self.refreshAILog() } else { self.refresh() }
             }
     }
@@ -80,6 +110,52 @@ final class ArchiveViewModel: ObservableObject {
             try? await Task.sleep(for: .seconds(1.2))
             if self?.copiedID == entry.id { self?.copiedID = nil }
         }
+    }
+
+    /// Return in the query field: a question ("…?") is answered from the
+    /// archive by the on-device model, using only the top search results.
+    func submit() {
+        guard tab == .records, ArchiveQuestion.isQuestion(query), canAsk, let answerer else { return }
+        let question = ArchiveQuestion.question(from: query)
+        let store = self.store
+        let language = targetLanguage()
+        let logging = aiLogEnabled()
+        askTask?.cancel()
+        answer = ArchiveAnswer(question: question, text: nil, isLoading: true)
+        askTask = Task { [weak self] in
+            let started = Date()
+            let entries = await store.search(question, limit: ArchiveQuestion.maximumEvidence).map(\.entry)
+            let evidence = entries.map { ArchiveEvidence($0) }
+            var text: String?
+            var outcome = AIAnswerOutcome.declined
+            var logged = "no matching records"
+            if !evidence.isEmpty {
+                do {
+                    let raw = try await answerer.answer(question: question, evidence: evidence, targetLanguage: language)
+                    text = ArchiveQuestion.sanitize(raw)
+                    outcome = text == nil ? .declined : .shown
+                    logged = text ?? raw
+                } catch {
+                    outcome = .failed
+                    logged = AnalysisPipeline.describe(error)
+                }
+            }
+            if logging {
+                await store.recordAIAnswer(AIAnswerRecord(feature: .archiveQuestion, subject: question, answer: logged, outcome: outcome,
+                                                          durationMilliseconds: Int(Date().timeIntervalSince(started) * 1000)))
+            }
+            guard !Task.isCancelled, let self else { return }
+            var cited: [VisualMemoryEntry] = []
+            if let text {
+                cited = ArchiveQuestion.citations(in: text, evidenceCount: entries.count).map { number in entries[number - 1] }
+            }
+            self.answer = ArchiveAnswer(question: question, text: text, isLoading: false, cited: cited)
+        }
+    }
+
+    func dismissAnswer() {
+        askTask?.cancel()
+        answer = nil
     }
 
     func refreshSessions() {

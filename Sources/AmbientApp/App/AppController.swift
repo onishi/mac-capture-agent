@@ -47,6 +47,8 @@ final class AppController: ObservableObject {
     let briefingProvider = AppleIntelligenceBriefingProvider()
     let memoryStore: IntelStore
     private let reasoner = AppleIntelligenceReasoner()
+    /// Answers questions asked in the archive (LA-30).
+    var archiveAnswerer: any ArchiveAnswering { reasoner }
 
     private var pipelineTask: Task<Void, Never>?
     private var resumeTask: Task<Void, Never>?
@@ -453,11 +455,20 @@ final class AppController: ObservableObject {
         let trail = gestureTrail
         gestureMonitor.start(displayID: displayID, onTrail: { points in
             await MainActor.run { trail.update(points, on: NSScreen.screen(for: displayID)) }
-        }, onCircle: { rect in
+        }, onCircle: { [weak self] rect in
+            let circledAt = Date()
             await MainActor.run { trail.lock(rect, on: NSScreen.screen(for: displayID)) }
             await pipeline.lookUp(region: rect)
+            await self?.noteCircleAnswered(since: circledAt)
         })
         Log.app.info("Circle lookup monitor started")
+    }
+
+    /// Circling something is the strongest sign of interest: the card it
+    /// produced counts like a search (+3) for personalization.
+    private func noteCircleAnswered(since start: Date) {
+        guard let message = lastMessage, message.capturedAt >= start, message.kind != .noIntel else { return }
+        recordFeedback(.searched, for: message)
     }
 
     private func restart() {

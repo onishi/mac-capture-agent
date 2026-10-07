@@ -62,7 +62,7 @@ JA = {
     "Move Down": "下へ",
     "QR codes": "QR コード",
     "Error causes (terminal, editor)": "エラーの原因（ターミナル・エディタ）",
-    "Unit conversion (pointer rest)": "単位換算（ポインタを止めたとき）",
+    "Units, time zones and dates (pointer rest)": "単位・時差・日付の換算（ポインタを止めたとき）",
     "Technical terms": "専門用語",
     "What code does (pointer rest)": "コードの説明（ポインタを止めたとき）",
     "Animals, plants, landmarks, dishes, products (estimate)": "動植物・ランドマーク・料理・製品（推定）",
@@ -77,8 +77,12 @@ JA = {
     "News background": "ニュースの背景",
     "Warn about secrets while sharing": "画面共有中の秘密情報の警告",
     "Circle with ⌥ to look up": "⌥ を押しながら丸で囲んで調べる",
+    "Answer questions about the archive": "アーカイブへの質問に答える",
     "Keep AI answers to review in the archive (AI LOG)": "AI の回答を記録してアーカイブで見返す（AI LOG）",
     "NO AI ANSWERS": "AI の回答はまだありません",
+    "End with ? and press Return to ask the archive (answered on this Mac from your records only).":
+        "末尾を ? にして Return を押すと、アーカイブに質問できます（この Mac の中で、記録だけを根拠に答えます）。",
+    "The archive has no record that answers this.": "この質問に答えられる記録はアーカイブにありません。",
     "Answers of the on-device model appear here when “Keep AI answers” is on in Settings.":
         "設定で「AI の回答を記録」をオンにすると、端末内のモデルの回答がここに表示されます。",
     "Click to copy the answer": "クリックで回答をコピー",

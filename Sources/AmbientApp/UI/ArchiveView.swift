@@ -21,6 +21,16 @@ struct ArchiveView: View {
                 queryField
             }
             Rectangle().fill(SpyTheme.accentDim).frame(height: 0.75)
+            if model.tab == .records, let answer = model.answer {
+                answerPanel(answer)
+            } else if model.tab == .records, model.canAsk {
+                Text("End with ? and press Return to ask the archive (answered on this Mac from your records only).")
+                    .font(.system(size: 11))
+                    .foregroundStyle(SpyTheme.textSecondary)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             switch model.tab {
             case .records: results
             case .sessions: sessionsList
@@ -186,6 +196,56 @@ struct ArchiveView: View {
         }
     }
 
+    // MARK: Ask the archive (LA-30)
+
+    private func answerPanel(_ answer: ArchiveAnswer) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text("ANSWER // ARCHIVE")
+                    .font(SpyTheme.mono(9.5, weight: .bold))
+                    .tracking(1.4)
+                    .foregroundStyle(SpyTheme.intel)
+                Text(IntelSource.onDeviceLLM.label)
+                    .font(SpyTheme.mono(8.5, weight: .semibold))
+                    .foregroundStyle(SpyTheme.textSecondary)
+                Spacer()
+                Button("✕") { model.dismissAnswer() }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(SpyTheme.textSecondary)
+            }
+            if answer.isLoading {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("ANALYZING ▮")
+                        .font(SpyTheme.mono(10, weight: .semibold))
+                        .foregroundStyle(SpyTheme.accent)
+                }
+            } else if let text = answer.text {
+                Text(text)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(SpyTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                ForEach(Array(answer.cited.enumerated()), id: \.offset) { _, entry in
+                    Text("▸ \(Self.timeFormatter.string(from: entry.timestamp)) · \(entry.application ?? "—") · \(entry.original)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(SpyTheme.textSecondary)
+                        .lineLimit(1)
+                }
+            } else {
+                Text("The archive has no record that answers this.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(SpyTheme.textSecondary)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .background(SpyTheme.intel.opacity(0.06))
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(SpyTheme.accentDim).frame(height: 0.75)
+        }
+    }
+
     // MARK: AI LOG
 
     @ViewBuilder
@@ -265,6 +325,7 @@ struct ArchiveView: View {
         case .newsBackground: return "NEWS"
         case .sensitiveWarning: return "SHARING"
         case .circleLookup: return "CIRCLE"
+        case .archiveQuestion: return "ASK"
         }
     }
 
@@ -303,6 +364,7 @@ struct ArchiveView: View {
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(SpyTheme.textPrimary)
                 .focused($queryFocused)
+                .onSubmit { model.submit() }
             if model.isSearching {
                 ProgressView().controlSize(.small)
             }

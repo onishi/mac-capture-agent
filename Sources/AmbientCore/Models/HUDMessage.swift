@@ -3,6 +3,29 @@ import Foundation
 import CoreGraphics
 #endif
 
+/// Where a HUD message came from (LOCAL_AI.md LA-51), shown on the card so
+/// estimates by the on-device model are never mistaken for facts.
+public enum IntelSource: String, Sendable, Codable {
+    /// Deterministic rules (conversions, error hints, abbreviations defined on screen).
+    case rule
+    /// Apple's on-device ML (Vision, Translation).
+    case onDeviceML
+    /// The on-device language model (Foundation Models) — an estimate.
+    case onDeviceLLM
+    /// The user's own history (archive, earlier reading).
+    case history
+
+    /// Card label (HUD chrome stays English).
+    public var label: String {
+        switch self {
+        case .rule: return "SRC ▸ RULE"
+        case .onDeviceML: return "SRC ▸ ON-DEVICE ML"
+        case .onDeviceLLM: return "SRC ▸ ON-DEVICE AI · ESTIMATE"
+        case .history: return "SRC ▸ YOUR HISTORY"
+        }
+    }
+}
+
 /// Content to show in the HUD. UI agnostic so it can be produced off the main thread.
 public struct HUDMessage: Sendable, Equatable, Identifiable {
     public enum Kind: String, Sendable {
@@ -54,6 +77,8 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
     public let capturedAt: Date
     /// When the subject was last seen before (re-appearance notice), if ever.
     public let previouslySeen: Date?
+    /// Set when it differs from the kind's usual source (e.g. a rule-based error hint).
+    public let explicitSource: IntelSource?
 
     public init(
         id: UUID = UUID(),
@@ -67,7 +92,8 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
         targetLanguage: String? = nil,
         confidence: Double? = nil,
         capturedAt: Date = Date(),
-        previouslySeen: Date? = nil
+        previouslySeen: Date? = nil,
+        source: IntelSource? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -81,13 +107,27 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
         self.confidence = confidence.map { min(max($0, 0), 1) }
         self.capturedAt = capturedAt
         self.previouslySeen = previouslySeen
+        self.explicitSource = source
+    }
+
+    /// What produced this message (nil for the "no intel" feedback).
+    public var source: IntelSource? {
+        if let explicitSource { return explicitSource }
+        switch kind {
+        case .translation, .qrCode: return .onDeviceML
+        case .explanation, .errorAnalysis, .codeSummary, .identification, .publicFigure, .mediaInfo, .newsContext, .regionSummary:
+            return .onDeviceLLM
+        case .securityWarning, .conversion, .cast: return .rule
+        case .resume: return .history
+        case .noIntel: return nil
+        }
     }
 
     /// A copy with a re-appearance date attached.
     public func withPreviouslySeen(_ date: Date?) -> HUDMessage {
         HUDMessage(id: id, kind: kind, title: title, original: original, detail: detail, anchor: anchor,
                    features: features, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage,
-                   confidence: confidence, capturedAt: capturedAt, previouslySeen: date)
+                   confidence: confidence, capturedAt: capturedAt, previouslySeen: date, source: explicitSource)
     }
 
     /// Display time is extended while a briefing is being generated.

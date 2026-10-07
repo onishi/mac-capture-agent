@@ -24,6 +24,19 @@ public struct CompiledPattern: @unchecked Sendable {
         firstRange(in: text) != nil
     }
 
+    /// Every match with its range in `text` and its capture groups (index 0 is the whole match).
+    public func matchesWithRanges(in text: String) -> [(range: Range<String.Index>, groups: [String?])] {
+        guard let regex else { return [] }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.matches(in: text, range: range).compactMap { match -> (range: Range<String.Index>, groups: [String?])? in
+            guard let whole = Range(match.range, in: text) else { return nil }
+            let groups: [String?] = (0..<match.numberOfRanges).map { index in
+                Range(match.range(at: index), in: text).map { String(text[$0]) }
+            }
+            return (range: whole, groups: groups)
+        }
+    }
+
     /// Every match's capture groups (index 0 is the whole match; nil when a group did not take part).
     public func captures(in text: String) -> [[String?]] {
         guard let regex else { return [] }

@@ -177,6 +177,17 @@
         }
       }
     },
+    "Answer questions about the archive": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アーカイブへの質問に答える"
+          }
+        }
+      }
+    },
     "Answers of the on-device model appear here when “Keep AI answers” is on in Settings.": {
       "extractionState": "manual",
       "localizations": {
@@ -360,6 +371,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "変化領域・OCR 範囲・ルーターのスコア・件数・処理時間を画面に描きます。認識したテキストは表示しません。"
+          }
+        }
+      }
+    },
+    "End with ? and press Return to ask the archive (answered on this Mac from your records only).": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "末尾を ? にして Return を押すと、アーカイブに質問できます（この Mac の中で、記録だけを根拠に答えます）。"
           }
         }
       }
@@ -1244,6 +1266,17 @@
         }
       }
     },
+    "The archive has no record that answers this.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この質問に答えられる記録はアーカイブにありません。"
+          }
+        }
+      }
+    },
     "To see what you see, the app needs Screen Recording permission. Frames stay in memory and are never saved or uploaded.": {
       "extractionState": "manual",
       "localizations": {
@@ -1332,13 +1365,13 @@
         }
       }
     },
-    "Unit conversion (pointer rest)": {
+    "Units, time zones and dates (pointer rest)": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "単位換算（ポインタを止めたとき）"
+            "value": "単位・時差・日付の換算（ポインタを止めたとき）"
           }
         }
       }

@@ -165,6 +165,7 @@ actor ContextIntelCoordinator {
             title = japanese ? "関連して読んだ記事" : "Related reading"
         }
         await present(HUDMessage(kind: .newsContext, title: title, original: headline, detail: lines.joined(separator: "\n"),
-                                 anchor: nil, targetLanguage: configuration.targetLanguage))
+                                 anchor: nil, targetLanguage: configuration.targetLanguage,
+                                 source: hasBackground ? .onDeviceLLM : .history))
     }
 }
