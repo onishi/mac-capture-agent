@@ -108,6 +108,25 @@ extension AppleIntelligenceReasoner: VisualIdentifying, MediaResearching {
     }
 }
 
+// MARK: - Circle to look up (LA-60)
+
+extension AppleIntelligenceReasoner: RegionDescribing {
+    func describe(text: String, appName: String?, targetLanguage: String) async throws -> String {
+        #if canImport(FoundationModels)
+        if #available(macOS 26.0, *) {
+            guard SystemLanguageModel.default.isAvailable else { throw BriefingError.unavailable }
+            let session = LanguageModelSession(instructions: RegionDescription.instructions(targetLanguage: targetLanguage))
+            let response = try await session.respond(
+                to: "App: \(appName ?? "unknown")\nCircled text:\n\(String(text.prefix(RegionDescription.maximumInputLength)))",
+                options: GenerationOptions(temperature: 0.2, maximumResponseTokens: 120)
+            )
+            return response.content
+        }
+        #endif
+        throw BriefingError.unavailable
+    }
+}
+
 #if canImport(FoundationModels)
 @available(macOS 26.0, *)
 @Generable

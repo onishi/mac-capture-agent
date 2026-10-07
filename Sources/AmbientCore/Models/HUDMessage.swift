@@ -31,6 +31,10 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
         case newsContext
         /// Quantities converted to metric (title = first original, detail = "72°F → 22.2 °C" lines).
         case conversion
+        /// What a circled area is about (on-device model; title = "TARGET", original = first line of the text).
+        case regionSummary
+        /// A circled area where nothing could be found (short feedback so the request isn't ignored silently).
+        case noIntel
     }
 
     public let id: UUID
@@ -91,8 +95,10 @@ public struct HUDMessage: Sendable, Equatable, Identifiable {
         withBriefing ? min(8, displayDuration + 2) : displayDuration
     }
 
-    /// Display time between 3 and 6 seconds depending on how much there is to read.
+    /// Display time between 3 and 6 seconds depending on how much there is to read
+    /// ("no intel" feedback only briefly).
     public var displayDuration: TimeInterval {
+        if kind == .noIntel { return 1.5 }
         let characters = Double(original.count + detail.count)
         return min(6, max(3, 3 + characters / 60))
     }

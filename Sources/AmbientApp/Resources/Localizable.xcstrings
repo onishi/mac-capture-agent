@@ -353,13 +353,13 @@
         }
       }
     },
-    "Everything runs on this Mac; the app never sends anything over the network. The on-device model cannot see images — it guesses from image labels and nearby text, so names are marked “possibly” unless the screen shows them. Abbreviations defined on screen and common errors are explained even without Apple Intelligence.": {
+    "Everything runs on this Mac; the app never sends anything over the network. The on-device model cannot see images — it guesses from image labels and nearby text, so names are marked “possibly” unless the screen shows them. Abbreviations defined on screen and common errors are explained even without Apple Intelligence. Circling with ⌥ held always answers: a QR code, an error, a translation, units, a term, code, a picture or — with Apple Intelligence — what the text is about.": {
       "extractionState": "manual",
       "localizations": {
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "すべてこの Mac の中で動き、ネットワークには何も送りません。端末内のモデルは画像を見られないため、画像の分類ラベルと周辺の文字から推定します。画面に名前が出ていない限り「かもしれません」と表示します。画面で定義された略語とよくあるエラーは、Apple Intelligence がなくても説明します。"
+            "value": "すべてこの Mac の中で動き、ネットワークには何も送りません。端末内のモデルは画像を見られないため、画像の分類ラベルと周辺の文字から推定します。画面に名前が出ていない限り「かもしれません」と表示します。画面で定義された略語とよくあるエラーは、Apple Intelligence がなくても説明します。⌥ を押しながら丸で囲むと必ず応答します（QR コード・エラー・翻訳・単位・用語・コード・写真、Apple Intelligence があれば文章の要点）。"
           }
         }
       }
@@ -426,6 +426,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "HUD"
+          }
+        }
+      }
+    },
+    "Hold ⌥ and circle something to look it up": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌥ を押しながら丸で囲んだものを調べる"
           }
         }
       }
@@ -1174,6 +1185,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "ビジュアルメモリ"
+          }
+        }
+      }
+    },
+    "Want to know about something right now? Hold ⌥ (Option) and circle it with the pointer.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今すぐ知りたいものがあれば、⌥（Option）を押しながらポインタで丸く囲んでください。"
           }
         }
       }

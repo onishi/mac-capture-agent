@@ -23,6 +23,11 @@ final class AppController: ObservableObject {
     private let overlay = OverlayWindowController()
     private let debugOverlay = DebugOverlayController()
     private let redactionOverlay = RedactionOverlayController()
+    private let gestureMonitor = CircleGestureMonitor()
+    private let gestureTrail = GestureTrailController()
+    /// The running pipeline, for circle lookups (LA-60).
+    private var currentPipeline: AnalysisPipeline?
+    private var gestureMonitorRunning = false
     private let screenShare = ScreenShareMonitor()
     /// Opens the archive with a query (set by the app delegate).
     var openArchive: ((String) -> Void)?
@@ -152,9 +157,11 @@ final class AppController: ObservableObject {
             let pipeline = makePipeline(configuration: configuration, displayID: displayID)
             runningConfiguration = configuration
             runningDisplayID = displayID
+            currentPipeline = pipeline
             pipelineTask = Task.detached(priority: .utility) {
                 await pipeline.run(frames: frames)
             }
+            updateGestureMonitor()
             status = .running
             tracker.start(trackerConfiguration)
             startFollowingDisplayIfNeeded()
@@ -205,6 +212,7 @@ final class AppController: ObservableObject {
 
     func shutdown() async {
         resumeTask?.cancel()
+        gestureMonitor.stop()
         pipelineTask?.cancel()
         pipelineTask = nil
         await capture.stop()
@@ -398,6 +406,8 @@ final class AppController: ObservableObject {
         pipelineTask = nil
         runningConfiguration = nil
         runningDisplayID = nil
+        currentPipeline = nil
+        updateGestureMonitor()
         debugOverlay.hide()
         redactionOverlay.clear()
         tracker.stop()
@@ -418,12 +428,35 @@ final class AppController: ObservableObject {
         Task { await store.configure(retentionDays: retention, userLanguage: language) }
         guard status == .running else { return }
         tracker.start(trackerConfiguration)
+        updateGestureMonitor()
         if settings.pipelineConfiguration != runningConfiguration {
             Log.app.info("Settings changed, restarting pipeline")
             restart()
         } else if settings.followMouseDisplay {
             startFollowingDisplayIfNeeded()
         }
+    }
+
+    // MARK: Circle to look up (LA-60)
+
+    /// Runs the ⌥-circle monitor while a pipeline runs and the feature is on.
+    private func updateGestureMonitor() {
+        let shouldRun = settings.circleLookupEnabled && currentPipeline != nil && runningDisplayID != nil
+        guard shouldRun != gestureMonitorRunning else { return }
+        gestureMonitorRunning = shouldRun
+        guard shouldRun, let pipeline = currentPipeline, let displayID = runningDisplayID else {
+            gestureMonitor.stop()
+            gestureTrail.update([], on: nil)
+            return
+        }
+        let trail = gestureTrail
+        gestureMonitor.start(displayID: displayID, onTrail: { points in
+            await MainActor.run { trail.update(points, on: NSScreen.screen(for: displayID)) }
+        }, onCircle: { rect in
+            await MainActor.run { trail.lock(rect, on: NSScreen.screen(for: displayID)) }
+            await pipeline.lookUp(region: rect)
+        })
+        Log.app.info("Circle lookup monitor started")
     }
 
     private func restart() {

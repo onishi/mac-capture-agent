@@ -137,7 +137,8 @@ struct SettingsView: View {
                 Toggle("Identify public figures named on screen", isOn: $settings.publicFigureEnabled)
                     .disabled(!briefingAvailable || !settings.localKnowledgeEnabled)
                 Toggle("Convert miles, °F, pounds… where the pointer rests", isOn: $settings.unitConversionEnabled)
-                Text("Everything runs on this Mac; the app never sends anything over the network. The on-device model cannot see images — it guesses from image labels and nearby text, so names are marked “possibly” unless the screen shows them. Abbreviations defined on screen and common errors are explained even without Apple Intelligence.")
+                Toggle("Hold ⌥ and circle something to look it up", isOn: $settings.circleLookupEnabled)
+                Text("Everything runs on this Mac; the app never sends anything over the network. The on-device model cannot see images — it guesses from image labels and nearby text, so names are marked “possibly” unless the screen shows them. Abbreviations defined on screen and common errors are explained even without Apple Intelligence. Circling with ⌥ held always answers: a QR code, an error, a translation, units, a term, code, a picture or — with Apple Intelligence — what the text is about.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

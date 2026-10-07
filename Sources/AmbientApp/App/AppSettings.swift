@@ -27,6 +27,7 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         static let resume = "resumeEnabled"
         static let localKnowledge = "localKnowledgeEnabled"
         static let unitConversion = "unitConversionEnabled"
+        static let circleLookup = "circleLookupEnabled"
         static let publicFigures = "publicFigureEnabled"
         static let mediaMode = "mediaModeEnabled"
         static let newsMode = "newsModeEnabled"
@@ -116,6 +117,10 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
     @Published var unitConversionEnabled: Bool {
         didSet { defaults.set(unitConversionEnabled, forKey: Key.unitConversion) }
     }
+    /// Hold ⌥ and circle something to look it up (LOCAL_AI.md LA-60).
+    @Published var circleLookupEnabled: Bool {
+        didSet { defaults.set(circleLookupEnabled, forKey: Key.circleLookup) }
+    }
     /// Look up public figures whose names appear on screen (text only).
     @Published var publicFigureEnabled: Bool {
         didSet { defaults.set(publicFigureEnabled, forKey: Key.publicFigures) }
@@ -168,6 +173,7 @@ final class AppSettings: ObservableObject, @unchecked Sendable {
         resumeEnabled = defaults.object(forKey: Key.resume) as? Bool ?? true
         localKnowledgeEnabled = defaults.object(forKey: Key.localKnowledge) as? Bool ?? true
         unitConversionEnabled = defaults.object(forKey: Key.unitConversion) as? Bool ?? true
+        circleLookupEnabled = defaults.object(forKey: Key.circleLookup) as? Bool ?? true
         publicFigureEnabled = defaults.object(forKey: Key.publicFigures) as? Bool ?? true
         mediaModeEnabled = defaults.object(forKey: Key.mediaMode) as? Bool ?? true
         newsModeEnabled = defaults.object(forKey: Key.newsMode) as? Bool ?? true

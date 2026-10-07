@@ -86,8 +86,9 @@ JA = {
     "Identify animals, plants, landmarks, dishes and products (estimate)": "動植物・ランドマーク・料理・製品を推定する",
     "Identify public figures named on screen": "画面に名前が出ている著名人を推定する",
     "Convert miles, °F, pounds… where the pointer rests": "ポインタを置いたところのマイル・°F・ポンドなどを換算する",
-    "Everything runs on this Mac; the app never sends anything over the network. The on-device model cannot see images — it guesses from image labels and nearby text, so names are marked “possibly” unless the screen shows them. Abbreviations defined on screen and common errors are explained even without Apple Intelligence.":
-        "すべてこの Mac の中で動き、ネットワークには何も送りません。端末内のモデルは画像を見られないため、画像の分類ラベルと周辺の文字から推定します。画面に名前が出ていない限り「かもしれません」と表示します。画面で定義された略語とよくあるエラーは、Apple Intelligence がなくても説明します。",
+    "Hold ⌥ and circle something to look it up": "⌥ を押しながら丸で囲んだものを調べる",
+    "Everything runs on this Mac; the app never sends anything over the network. The on-device model cannot see images — it guesses from image labels and nearby text, so names are marked “possibly” unless the screen shows them. Abbreviations defined on screen and common errors are explained even without Apple Intelligence. Circling with ⌥ held always answers: a QR code, an error, a translation, units, a term, code, a picture or — with Apple Intelligence — what the text is about.":
+        "すべてこの Mac の中で動き、ネットワークには何も送りません。端末内のモデルは画像を見られないため、画像の分類ラベルと周辺の文字から推定します。画面に名前が出ていない限り「かもしれません」と表示します。画面で定義された略語とよくあるエラーは、Apple Intelligence がなくても説明します。⌥ を押しながら丸で囲むと必ず応答します（QR コード・エラー・翻訳・単位・用語・コード・写真、Apple Intelligence があれば文章の要点）。",
     "Movie, anime & news": "映画・アニメ・ニュース",
     "Movie / Anime mode (work card, cast on screen)": "映画・アニメモード（作品カード、画面上のキャスト）",
     "Spoilers": "ネタバレ",
@@ -119,6 +120,8 @@ JA = {
         "カードにポインタを乗せると表示が続き、操作ボタンが使えます。⌥⌘K でこれまでに表示した内容のアーカイブを開けます。",
     "To see what you see, the app needs Screen Recording permission. Frames stay in memory and are never saved or uploaded.":
         "あなたと同じ画面を見るために、画面収録の許可が必要です。フレームはメモリ上だけで扱い、保存もアップロードもしません。",
+    "Want to know about something right now? Hold ⌥ (Option) and circle it with the pointer.":
+        "今すぐ知りたいものがあれば、⌥（Option）を押しながらポインタで丸く囲んでください。",
     "Open Screen Recording settings": "画面収録の設定を開く",
     "After enabling the app in System Settings, quit and reopen it.": "システム設定でこのアプリをオンにしたら、一度終了して開き直してください。",
     "Translation runs on this Mac with Apple's Translation models. Download the languages you want translated in System Settings › General › Language & Region › Translation Languages.":

@@ -37,7 +37,7 @@ enum HUDEvent: Sendable {
     case redact([CGRect])
 }
 
-typealias PipelineReasoner = TermExplaining & RouterJudging & DeveloperAssisting
+typealias PipelineReasoner = TermExplaining & RouterJudging & DeveloperAssisting & RegionDescribing
 
 /// How a routed action ended, for counters and diagnostics.
 private enum IntelOutcome {
@@ -397,10 +397,11 @@ actor AnalysisPipeline {
         return classification
     }
 
-    private func translate(_ action: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval) async -> IntelOutcome {
+    private func translate(_ action: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval,
+                           explicit: Bool = false) async -> IntelOutcome {
         guard let text = action.payload else { return .discarded }
         let key = CooldownCache.key(action: action.action, payload: text)
-        guard cooldown.checkAndRecord(key, now: timestamp) else {
+        guard passesCooldown(key, now: timestamp, explicit: explicit) else {
             Log.pipeline.debug("Suppressed by cooldown")
             return .cooldown
         }
@@ -453,12 +454,13 @@ actor AnalysisPipeline {
     /// Explains an error seen in a terminal / IDE / GitHub.
     /// The on-device LLM first; canned rules (LOCAL_AI.md LA-20) when it is
     /// unavailable, busy or gives nothing usable.
-    private func explainError(_ candidate: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval) async -> IntelOutcome {
+    private func explainError(_ candidate: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval,
+                              explicit: Bool = false) async -> IntelOutcome {
         guard let line = candidate.payload else { return .discarded }
         let key = CooldownCache.key(action: .explainError, payload: line)
-        guard !cooldown.isCoolingDown(key, now: timestamp) else { return .cooldown }
+        guard explicit || !cooldown.isCoolingDown(key, now: timestamp) else { return .cooldown }
         var explanation: ErrorExplanation?
-        if let reasoner = activeReasoner, llmLimiter.allow(now: timestamp) {
+        if let reasoner = activeReasoner, explicit || llmLimiter.allow(now: timestamp) {
             do {
                 let raw = try await reasoner.explainError(line, context: candidate.context ?? line, targetLanguage: configuration.targetLanguage)
                 explanation = DeveloperOutputSanitizer.sanitize(raw, errorLine: line)
@@ -490,20 +492,26 @@ actor AnalysisPipeline {
 
     /// Summarizes the code around a pointer dwell.
     private func explainCode(in region: CGRect, frame: AnalyzableFrame, app: ForegroundContextProvider.Snapshot) async -> IntelOutcome {
-        guard let reasoner = activeReasoner else { return .discarded }
+        guard activeReasoner != nil else { return .discarded }
         let lines = await ocr.recognizeText(in: frame.pixelBuffer, regions: [ChangedRegion(rect: region, confidence: 1)])
         let code = lines
             .sorted { $0.boundingBox.minY < $1.boundingBox.minY }
             .map(\.text)
             .joined(separator: "\n")
+        return await explainCode(code, region: region, app: app, timestamp: frame.timestamp)
+    }
+
+    private func explainCode(_ code: String, region: CGRect, app: ForegroundContextProvider.Snapshot, timestamp: TimeInterval,
+                             explicit: Bool = false) async -> IntelOutcome {
+        guard let reasoner = activeReasoner else { return .discarded }
         guard code.count >= 40, DeveloperOutputSanitizer.looksLikeCode(code),
               sensitiveDetector.kinds(in: code).isEmpty else { return .discarded }
         let key = CooldownCache.key(action: .explainCode, payload: String(code.prefix(200)))
-        guard !cooldown.isCoolingDown(key, now: frame.timestamp), llmLimiter.allow(now: frame.timestamp) else { return .cooldown }
+        guard explicit || (!cooldown.isCoolingDown(key, now: timestamp) && llmLimiter.allow(now: timestamp)) else { return .cooldown }
         do {
             let raw = try await reasoner.summarizeCode(code, targetLanguage: configuration.targetLanguage)
             guard let summary = DeveloperOutputSanitizer.sanitize(raw) else { return .discarded }
-            cooldown.record(key, now: frame.timestamp)
+            cooldown.record(key, now: timestamp)
             let firstLine = code.split(separator: "\n").first.map { String($0.prefix(80)) } ?? ""
             let message = HUDMessage(
                 kind: .codeSummary,
@@ -544,23 +552,24 @@ actor AnalysisPipeline {
         blocks: [RecognizedTextRegion],
         frame: AnalyzableFrame,
         app: ForegroundContextProvider.Snapshot,
-        windowTitle: String?
+        windowTitle: String?,
+        explicit: Bool = false
     ) async -> IntelOutcome? {
         let context = blocks.map(\.text).joined(separator: " ")
 
         if let hint = classification.categories.first(where: { [.animal, .plant, .landmark, .food, .product].contains($0) }),
            let largest = regions.max(by: { $0.area < $1.area }),
-           Double(largest.area) >= IdentificationPolicy.minimumRegionArea {
+           explicit || Double(largest.area) >= IdentificationPolicy.minimumRegionArea {
             let labels = VisualLabelSelector.select(classification.labels, for: hint)
             guard !labels.isEmpty else { return .discarded }
-            guard identifyLimiter.allow(now: frame.timestamp) else { return .cooldown }
+            guard explicit || identifyLimiter.allow(now: frame.timestamp) else { return .cooldown }
             do {
                 var answer = try await identifier.identify(labels: labels, hint: hint, context: context, targetLanguage: configuration.targetLanguage)
                 answer.confidence = IdentificationPolicy.localConfidence(
                     answer, labelConfidence: VisualLabelSelector.topConfidence(labels), nearbyText: context)
                 guard IdentificationPolicy.accept(answer, hint: hint) else { return .discarded }
                 let key = CooldownCache.key(action: .ignore, payload: "id " + answer.name)
-                guard cooldown.checkAndRecord(key, now: frame.timestamp) else { return .cooldown }
+                guard passesCooldown(key, now: frame.timestamp, explicit: explicit) else { return .cooldown }
                 let entityType: EntityType
                 let action: SuggestedAction
                 switch answer.category {
@@ -591,7 +600,7 @@ actor AnalysisPipeline {
             }
         }
 
-        guard configuration.publicFigureEnabled else { return nil }
+        guard configuration.publicFigureEnabled, !explicit else { return nil }
         let text = ([windowTitle].compactMap { $0 } + blocks.map(\.text)).joined(separator: "\n")
         let people = NLEntityExtractor.entities(in: text).filter { $0.type == .person }
         guard let person = people.first(where: { !personCooldown.isCoolingDown($0.canonicalName, now: frame.timestamp) }) else { return nil }
@@ -643,6 +652,128 @@ actor AnalysisPipeline {
         return .shown
     }
 
+    // MARK: Circle to look up (LOCAL_AI.md LA-60)
+
+    /// The user circled `region` (normalized, top-left origin) on the captured
+    /// display. An explicit request: the ignore-first threshold and cooldowns
+    /// don't apply, and when nothing is found a short "no intel" is shown so
+    /// the gesture never seems ignored. Privacy rules still apply.
+    func lookUp(region: CGRect) async {
+        guard let frame = await frameBuffer.currentFrame else { return }
+        let app = foreground.current
+        let windowTitle = foreground.windowTitle(for: app.processIdentifier)
+        guard privacy.allowsAnalysis(of: app, windowTitle: windowTitle) else { return }
+        Log.pipeline.info("Circle lookup requested")
+
+        let target = ChangedRegion(rect: region, confidence: 1)
+        let lines = await ocr.recognizeText(in: frame.pixelBuffer, regions: [target])
+        let blocks = TextBlockGrouper().group(lines)
+        let codes = await ocr.detectQRCodes(in: frame.pixelBuffer, regions: [target])
+            .filter { sensitiveDetector.kinds(in: $0.payload).isEmpty }
+        let (safeBlocks, _) = sensitiveDetector.partition(blocks)
+        let text = safeBlocks
+            .sorted { $0.boundingBox.minY < $1.boundingBox.minY }
+            .map(\.text)
+            .joined(separator: "\n")
+        for block in safeBlocks {
+            glossary.learn(from: block.text)
+        }
+        let classification = configuration.imageClassificationEnabled
+            ? await classifier.classify(frame.pixelBuffer, region: region)
+            : ImageClassification()
+        let context = AnalysisContext(
+            appName: app.appName,
+            bundleIdentifier: app.bundleIdentifier,
+            windowTitle: windowTitle,
+            textRegions: safeBlocks,
+            visualCategories: classification.categories
+        )
+        let plan = ActiveLookupPlanner.plan(
+            qrPayloads: codes.map { $0.payload },
+            candidates: router.candidates(for: context),
+            text: text,
+            conversions: UnitConverter.conversions(in: text, targetLanguage: configuration.targetLanguage),
+            categories: classification.categories,
+            canUseLanguageModel: activeReasoner != nil
+        )
+        Log.pipeline.debug("Circle lookup: \(text.count) chars, \(classification.labels.count) label(s)")
+
+        let now = frame.timestamp
+        var outcome: IntelOutcome?
+        switch plan {
+        case .qrCode(let payload):
+            let rect = codes.first(where: { $0.payload == payload })?.rect ?? region
+            outcome = await showQRCode(payload, rect: rect, app: app, timestamp: now, explicit: true)
+        case .explainError(let candidate):
+            outcome = await explainError(candidate, app: app, windowTitle: windowTitle, timestamp: now, explicit: true)
+        case .translate(let candidate):
+            outcome = await translate(candidate, app: app, windowTitle: windowTitle, timestamp: now, explicit: true)
+        case .convertUnits(let conversions):
+            if let first = conversions.first {
+                await presentConversions(conversions, first: first, anchor: region)
+                outcome = .shown
+            }
+        case .explainTerm(let candidate):
+            outcome = await explainTerm(candidate, app: app, windowTitle: windowTitle, timestamp: now, explicit: true)
+        case .explainCode(let code):
+            outcome = await explainCode(code, region: region, app: app, timestamp: now, explicit: true)
+        case .identify:
+            if let identifier, identifier.isAvailable {
+                outcome = await identifyLocally(identifier, classification: classification, regions: [target], blocks: safeBlocks,
+                                                frame: frame, app: app, windowTitle: windowTitle, explicit: true)
+            }
+        case .describe(let described):
+            outcome = await describeRegion(described, region: region, app: app)
+        case .nothing:
+            break
+        }
+        // The specific path found nothing usable: fall back to "what is this?".
+        var describedAlready = false
+        if case .describe = plan { describedAlready = true }
+        if outcome != .shown, plan != .nothing, !describedAlready, text.count >= ActiveLookupPlanner.minimumDescribeLength {
+            outcome = await describeRegion(text, region: region, app: app)
+        }
+        if outcome == .shown {
+            counters.hudsShown += 1
+        } else {
+            let japanese = LanguageCode.base(configuration.targetLanguage) == "ja"
+            await present(.show(HUDMessage(
+                kind: .noIntel,
+                title: "NO INTEL",
+                original: "",
+                detail: japanese ? "ここからは何も分かりませんでした" : "Nothing found here",
+                anchor: region,
+                targetLanguage: configuration.targetLanguage
+            ), briefingPending: false))
+        }
+    }
+
+    /// "What is this?" for circled text, by the on-device model.
+    private func describeRegion(_ text: String, region: CGRect, app: ForegroundContextProvider.Snapshot) async -> IntelOutcome {
+        guard let reasoner = activeReasoner else { return .discarded }
+        let input = String(text.prefix(RegionDescription.maximumInputLength))
+        do {
+            let raw = try await reasoner.describe(text: input, appName: app.appName, targetLanguage: configuration.targetLanguage)
+            guard let summary = RegionDescription.sanitize(raw, input: input) else { return .discarded }
+            let firstLine = input.split(separator: "\n").first.map { String($0.prefix(80)) } ?? ""
+            let message = HUDMessage(
+                kind: .regionSummary,
+                title: "TARGET",
+                original: firstLine,
+                detail: summary,
+                anchor: region,
+                features: PersonalizationFeatures(action: .explainTerm, language: nil, bundleIdentifier: app.bundleIdentifier),
+                targetLanguage: configuration.targetLanguage
+            )
+            await present(.show(message, briefingPending: false))
+            Log.pipeline.info("Circled area described (\(input.count) chars)")
+            return .shown
+        } catch {
+            Log.pipeline.error("Region description failed: \(String(describing: error), privacy: .public)")
+            return .failed
+        }
+    }
+
     // MARK: Unit conversion (LOCAL_AI.md LA-15)
 
     /// Imperial quantities in the text under a resting pointer, converted to metric.
@@ -653,19 +784,23 @@ actor AnalysisPipeline {
             guard let first = conversions.first else { continue }
             let key = CooldownCache.key(action: .ignore, payload: "convert " + conversions.map(\.original).joined(separator: "|"))
             guard cooldown.checkAndRecord(key, now: timestamp) else { return .cooldown }
-            let message = HUDMessage(
-                kind: .conversion,
-                title: first.converted,
-                original: first.original,
-                detail: conversions.map { "\($0.original) → \($0.converted)" }.joined(separator: "\n"),
-                anchor: block.boundingBox,
-                targetLanguage: configuration.targetLanguage
-            )
-            await present(.show(message, briefingPending: false))
-            Log.pipeline.info("Units converted (\(conversions.count))")
+            await presentConversions(conversions, first: first, anchor: block.boundingBox)
             return .shown
         }
         return nil
+    }
+
+    private func presentConversions(_ conversions: [UnitConversion], first: UnitConversion, anchor: CGRect?) async {
+        let message = HUDMessage(
+            kind: .conversion,
+            title: first.converted,
+            original: first.original,
+            detail: conversions.map { "\($0.original) → \($0.converted)" }.joined(separator: "\n"),
+            anchor: anchor,
+            targetLanguage: configuration.targetLanguage
+        )
+        await present(.show(message, briefingPending: false))
+        Log.pipeline.info("Units converted (\(conversions.count))")
     }
 
     // MARK: Movie / Anime mode
@@ -699,10 +834,11 @@ actor AnalysisPipeline {
     // MARK: QR codes
 
     /// Shows where an on-screen QR code leads (people can't read QR codes on a screen).
-    private func showQRCode(_ payload: String, rect: CGRect, app: ForegroundContextProvider.Snapshot, timestamp: TimeInterval) async -> IntelOutcome {
+    private func showQRCode(_ payload: String, rect: CGRect, app: ForegroundContextProvider.Snapshot, timestamp: TimeInterval,
+                            explicit: Bool = false) async -> IntelOutcome {
         guard let content = QRContent.display(payload), sensitiveDetector.kinds(in: payload).isEmpty else { return .discarded }
         let key = CooldownCache.key(action: .ignore, payload: "qr " + payload)
-        guard cooldown.checkAndRecord(key, now: timestamp) else { return .cooldown }
+        guard passesCooldown(key, now: timestamp, explicit: explicit) else { return .cooldown }
         let message = HUDMessage(
             kind: .qrCode,
             title: content.isURL ? "LINK" : "TEXT",
@@ -750,6 +886,13 @@ actor AnalysisPipeline {
         return reasoner
     }
 
+    /// Automatic intel respects the cooldown; an explicit request (circle) always passes but is still recorded.
+    private func passesCooldown(_ key: String, now: TimeInterval, explicit: Bool) -> Bool {
+        guard explicit else { return cooldown.checkAndRecord(key, now: now) }
+        cooldown.record(key, now: now)
+        return true
+    }
+
     /// A definition of the abbreviation seen earlier on screen, unless the
     /// text around it already defines it (the page explains itself).
     private func glossaryDefinition(for term: String, context: String?) -> AcronymDefinition? {
@@ -762,15 +905,16 @@ actor AnalysisPipeline {
     /// which may also decide the term is not worth explaining (cached too).
     /// Without the LLM, an abbreviation defined earlier on screen is expanded
     /// from the in-memory glossary (LOCAL_AI.md LA-6).
-    private func explainTerm(_ candidate: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval) async -> IntelOutcome {
+    private func explainTerm(_ candidate: RoutedAction, app: ForegroundContextProvider.Snapshot, windowTitle: String?, timestamp: TimeInterval,
+                             explicit: Bool = false) async -> IntelOutcome {
         guard let term = candidate.payload else { return .discarded }
         let definition = glossaryDefinition(for: term, context: candidate.context)
         let reasoner = activeReasoner
         guard reasoner != nil || definition != nil else { return .discarded }
         let canonical = EntityName.canonical(term)
-        if await store.shouldSkipTerm(canonical) { return .discarded }
+        if !explicit, await store.shouldSkipTerm(canonical) { return .discarded }
         let key = CooldownCache.key(action: .explainTerm, payload: canonical)
-        guard !cooldown.isCoolingDown(key, now: timestamp) else { return .cooldown }
+        guard explicit || !cooldown.isCoolingDown(key, now: timestamp) else { return .cooldown }
 
         var explanation: TermExplanation
         if let definition, reasoner == nil {
@@ -784,7 +928,7 @@ actor AnalysisPipeline {
             guard cached.summary != TermExplanationSanitizer.declinedMarker else { return .discarded }
             explanation = TermExplanation(shouldExplain: true, expansion: cached.detail, summary: cached.summary)
         } else {
-            guard let reasoner, llmLimiter.allow(now: timestamp) else { return .discarded }
+            guard let reasoner, explicit || llmLimiter.allow(now: timestamp) else { return .discarded }
             do {
                 var context = candidate.context ?? term
                 if let definition { context = "\(definition.acronym) = \(definition.expansion). " + context }
@@ -837,11 +981,12 @@ actor AnalysisPipeline {
 
     private func rememberIfEnabled(_ message: HUDMessage, app: ForegroundContextProvider.Snapshot, windowTitle: String?, entities: [ExtractedEntity]) async {
         guard configuration.memoryEnabled else { return }
-        guard ![.securityWarning, .qrCode, .resume, .mediaInfo, .cast, .newsContext, .conversion].contains(message.kind) else { return }
+        guard ![.securityWarning, .qrCode, .resume, .mediaInfo, .cast, .newsContext, .conversion, .regionSummary, .noIntel].contains(message.kind) else { return }
         let isExplanation = message.kind == .explanation
         let kind: VisualMemoryEntry.Kind
         switch message.kind {
-        case .translation, .securityWarning, .qrCode, .resume, .mediaInfo, .cast, .newsContext, .conversion: kind = .translation
+        case .translation, .securityWarning, .qrCode, .resume, .mediaInfo, .cast, .newsContext, .conversion, .regionSummary, .noIntel:
+            kind = .translation
         case .explanation: kind = .explanation
         case .errorAnalysis: kind = .errorAnalysis
         case .codeSummary: kind = .codeSummary

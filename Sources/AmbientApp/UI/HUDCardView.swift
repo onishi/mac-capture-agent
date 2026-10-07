@@ -76,6 +76,11 @@ struct HUDCardView: View {
                 EmptyView()
             case .qrCode, .conversion:
                 actionButton("COPY", .copy)
+            case .regionSummary:
+                actionButton("COPY", .copy)
+                actionButton("NOT USEFUL", .notUseful)
+            case .noIntel:
+                EmptyView()
             case .resume:
                 actionButton("SESSIONS", .openArchive)
             case .mediaInfo, .cast:
@@ -103,7 +108,7 @@ struct HUDCardView: View {
                     actionButton("MUTE \(LanguageCode.base(language).uppercased())", .skipLanguage)
                 }
             case .errorAnalysis, .codeSummary, .securityWarning, .qrCode, .resume, .identification, .publicFigure,
-                 .mediaInfo, .cast, .newsContext, .conversion:
+                 .mediaInfo, .cast, .newsContext, .conversion, .regionSummary, .noIntel:
                 EmptyView()
             }
             Spacer(minLength: 0)
@@ -149,6 +154,8 @@ struct HUDCardView: View {
         case .cast: return "CAST // ON SCREEN"
         case .newsContext: return "BRIEFING // BACKGROUND"
         case .conversion: return "INTEL // CONVERSION"
+        case .regionSummary: return "INTEL // TARGET ANALYSIS"
+        case .noIntel: return "SCAN // NO INTEL"
         }
     }
 
@@ -167,6 +174,8 @@ struct HUDCardView: View {
         case .cast: return "CAST"
         case .newsContext: return "NEWS"
         case .conversion: return "UNITS"
+        case .regionSummary: return "TARGET"
+        case .noIntel: return "NULL"
         }
     }
 
@@ -175,7 +184,8 @@ struct HUDCardView: View {
         switch message.kind {
         case .errorAnalysis, .securityWarning: return SpyTheme.alert
         case .resume, .publicFigure, .mediaInfo, .cast, .newsContext: return SpyTheme.intel
-        case .translation, .explanation, .codeSummary, .qrCode, .identification, .conversion: return SpyTheme.accent
+        case .translation, .explanation, .codeSummary, .qrCode, .identification, .conversion, .regionSummary, .noIntel:
+            return SpyTheme.accent
         }
     }
 

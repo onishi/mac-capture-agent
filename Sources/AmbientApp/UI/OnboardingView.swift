@@ -166,6 +166,7 @@ struct OnboardingView: View {
             paragraph("Ambient Screen Intelligence watches your screen with you and quietly adds what you would have searched for — a translation, a term, the cause of an error, who is on screen.")
             paragraph("It prefers to show nothing. Most of the time you will not notice it; a card appears only when it is likely to be worth it, and fades after a few seconds.")
             paragraph("Hover a card to keep it and to open its actions. ⌥⌘K opens the archive of everything it has shown you.")
+            paragraph("Want to know about something right now? Hold ⌥ (Option) and circle it with the pointer.")
         case .screenAccess:
             paragraph("To see what you see, the app needs Screen Recording permission. Frames stay in memory and are never saved or uploaded.")
             statusLine(model.state.screenRecordingGranted ? "PERMISSION GRANTED" : "PERMISSION REQUIRED", ok: model.state.screenRecordingGranted)
